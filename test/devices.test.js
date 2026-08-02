@@ -10,7 +10,7 @@ import {
   clientFromDevice,
 } from '../src/devices.js';
 import { normalizeConfig } from '../src/config.js';
-import { CAPABILITIES, DEVICE_PARAMS } from '../src/reolink/constants.js';
+import { CAPABILITIES, DEVICE_PARAMS, AI_FEATURES_ENABLED } from '../src/reolink/constants.js';
 import { fakeGladys, fakeDevice } from './helpers/fakeGladys.js';
 
 const gladys = fakeGladys();
@@ -83,7 +83,10 @@ test('a feature is only created for a capability the camera announced', () => {
   assert.ok(loaded.some((feature) => feature.category === 'battery'));
   assert.ok(loaded.some((feature) => feature.category === 'light'));
   assert.ok(loaded.some((feature) => feature.category === 'siren'));
-  assert.ok(loaded.some((feature) => feature.category === 'presence-sensor'));
+  assert.equal(
+    loaded.some((feature) => feature.category === 'presence-sensor'),
+    AI_FEATURES_ENABLED,
+  );
 });
 
 test('a doorbell gets a push button, an ordinary camera does not', () => {
@@ -98,12 +101,16 @@ test('a doorbell gets a push button, an ordinary camera does not', () => {
 test('the AI detections are presence sensors, not a second motion sensor', () => {
   // Gladys already gets a motion feature from GetMdState; a second one saying
   // the same thing differently would be confusing in the scene editor.
+  //
+  // While AI_FEATURES_ENABLED is false the presence features are held back
+  // (Gladys cannot display a presence-sensor/binary yet), so the expected count
+  // follows the flag — the motion sensor is unaffected either way.
   const features = buildFeatures(
     gladys,
     camera({ capabilities: [CAPABILITIES.AI_PEOPLE, CAPABILITIES.AI_VEHICLE] }),
   );
   const presence = features.filter((feature) => feature.category === 'presence-sensor');
-  assert.equal(presence.length, 2);
+  assert.equal(presence.length, AI_FEATURES_ENABLED ? 2 : 0);
   assert.equal(features.filter((feature) => feature.category === 'motion-sensor').length, 1);
 });
 

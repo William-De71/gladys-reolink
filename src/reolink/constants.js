@@ -186,6 +186,23 @@ export const FEATURE_SUFFIXES = {
 };
 
 /**
+ * Whether the AI detections (person, vehicle, animal) become Gladys features.
+ *
+ * They are held back, NOT removed: the capability detection, the polling and the
+ * feature builders below all stay in place and come back by flipping this to
+ * true. The reason is entirely on the Gladys side — the core knows the
+ * `presence-sensor` category, but its front end only maps it to the `push` type.
+ * A `presence-sensor` + `binary` feature therefore reaches the UI with no label
+ * and no icon (an empty grey box in the device editor), and its history renders
+ * through `LastSeenDeviceValue`, showing "seen 9 hours ago" instead of a
+ * yes/no state.
+ *
+ * See `docs/gladys-presence-sensor-binary.md` for the upstream change that
+ * makes them displayable, and flip this once it has shipped.
+ */
+export const AI_FEATURES_ENABLED = false;
+
+/**
  * How long a detection stays reported before being reset to 0.
  *
  * `GetMdState` and `GetAiState` report the CURRENT state, so a detection that

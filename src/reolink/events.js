@@ -27,19 +27,26 @@ import {
   CAPABILITIES,
   DETECTION_RESET_MS,
   DEFAULT_CHANNEL,
+  AI_FEATURES_ENABLED,
 } from './constants.js';
 
 /**
  * The detections read on every round, and the feature each one publishes.
  *
  * Motion has no capability gate: every Reolink camera answers `GetMdState`.
+ *
+ * The three AI ones are dropped while `AI_FEATURES_ENABLED` is false: their
+ * features are not created, so publishing them would target external ids no
+ * device carries. They are still READ on every round (`readStates` keeps asking
+ * for `GetAiState`), which costs nothing extra — the command travels in the same
+ * batch — and means only this list has to change when Gladys can display them.
  */
 const DETECTIONS = [
   { capability: null, suffix: FEATURE_SUFFIXES.MOTION, key: 'motion' },
   { capability: CAPABILITIES.AI_PEOPLE, suffix: FEATURE_SUFFIXES.AI_PEOPLE, key: 'people' },
   { capability: CAPABILITIES.AI_VEHICLE, suffix: FEATURE_SUFFIXES.AI_VEHICLE, key: 'vehicle' },
   { capability: CAPABILITIES.AI_ANIMAL, suffix: FEATURE_SUFFIXES.AI_ANIMAL, key: 'animal' },
-];
+].filter((detection) => AI_FEATURES_ENABLED || detection.key === 'motion');
 
 /**
  * Read the doorbell press out of a `GetAlarm`-style answer.

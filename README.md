@@ -1,6 +1,8 @@
 # gladys-reolink
 
-External integration bringing **Reolink** cameras to [Gladys Assistant](https://gladysassistant.com): dashboard snapshots, live video, motion and AI detections as scene triggers, battery level, and control of the spotlight, siren, infrared LEDs and PTZ presets.
+External integration bringing **Reolink** cameras to [Gladys Assistant](https://gladysassistant.com): dashboard snapshots, live video, motion detection as a scene trigger, battery level, and control of the spotlight, siren, infrared LEDs and PTZ presets.
+
+> The person / vehicle / animal AI detections are implemented but **on hold**: Gladys cannot display a `presence-sensor` + `binary` feature yet. See [`docs/gladys-presence-sensor-binary.md`](docs/gladys-presence-sensor-binary.md) for the upstream change, and flip `AI_FEATURES_ENABLED` in `src/reolink/constants.js` once it has shipped.
 
 📖 User documentation: [English](docs/en.md) — [Français](docs/fr.md)
 

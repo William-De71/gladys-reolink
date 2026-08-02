@@ -42,24 +42,25 @@ Cameras absent from that list use the global account.
 
 Each camera gets **the features it actually has**. The integration asks the camera rather than trusting its model name: two cameras of the same range can differ.
 
-| Feature                             | On which cameras              |
-| ----------------------------------- | ----------------------------- |
-| Image                               | All                           |
-| Live video                          | All                           |
-| Motion                              | All                           |
-| Person / vehicle / animal detection | Models with smart detection   |
-| Doorbell                            | Video doorbells               |
-| Battery                             | Battery and solar models      |
-| Spotlight                           | Models with a white spotlight |
-| Siren                               | Models with an alarm speaker  |
-| Infrared                            | Most models                   |
-| PTZ preset                          | Motorized cameras             |
+| Feature    | On which cameras              |
+| ---------- | ----------------------------- |
+| Image      | All                           |
+| Live video | All                           |
+| Motion     | All                           |
+| Doorbell   | Video doorbells               |
+| Battery    | Battery and solar models      |
+| Spotlight  | Models with a white spotlight |
+| Siren      | Models with an alarm speaker  |
+| Infrared   | Most models                   |
+| PTZ preset | Motorized cameras             |
 
 ### Detections
 
 Reolink cameras keep no event log: they report their **current state**. Gladys therefore asks them regularly, and the check interval is also the detection delay. It defaults to 15 seconds; you can lower it to react faster, at the cost of questioning your cameras more often.
 
 A detection also triggers an image capture, so the widget shows what happened without waiting.
+
+> **Person / vehicle / animal detection.** Recent cameras tell these three apart, but Gladys cannot display them properly yet: they would show up as features with no name and no icon. They are therefore on hold, and will come back as soon as Gladys supports them. Motion detection itself works on every camera.
 
 ### PTZ presets
 

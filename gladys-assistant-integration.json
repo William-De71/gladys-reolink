@@ -26,8 +26,8 @@
         "fr": "Pour commencer"
       },
       "description": {
-        "en": "This integration talks to your cameras directly on your network — no Reolink account, nothing goes through the cloud. Enter the account you use to log into your cameras below, then go to the Discover screen and run a scan.\n\nEach camera gets the features it actually has: image and motion for all of them, plus battery, person/vehicle/animal detection, spotlight, siren or PTZ presets depending on the model.",
-        "fr": "Cette intégration parle à vos caméras directement sur votre réseau — sans compte Reolink, rien ne passe par le cloud. Renseignez ci-dessous le compte utilisé pour vous connecter à vos caméras, puis allez dans l'écran Découverte et lancez un scan.\n\nChaque caméra reçoit les fonctionnalités qu'elle possède réellement : image et mouvement pour toutes, plus batterie, détection personne/véhicule/animal, projecteur, sirène ou positions PTZ selon le modèle."
+        "en": "This integration talks to your cameras directly on your network — no Reolink account, nothing goes through the cloud. Enter the account you use to log into your cameras below, then go to the Discover screen and run a scan.\n\nEach camera gets the features it actually has: image and motion for all of them, plus battery, spotlight, siren or PTZ presets depending on the model.",
+        "fr": "Cette intégration parle à vos caméras directement sur votre réseau — sans compte Reolink, rien ne passe par le cloud. Renseignez ci-dessous le compte utilisé pour vous connecter à vos caméras, puis allez dans l'écran Découverte et lancez un scan.\n\nChaque caméra reçoit les fonctionnalités qu'elle possède réellement : image et mouvement pour toutes, plus batterie, projecteur, sirène ou positions PTZ selon le modèle."
       },
       "links": [
         {

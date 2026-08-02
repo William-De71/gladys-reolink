@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { EventWatcher, parseMotionState, parseVisitorState } from '../src/reolink/events.js';
 import { BatteryGuard } from '../src/reolink/batteryGuard.js';
 import { fakeGladys, fakeDevice, fakeApi, fakeSessions } from './helpers/fakeGladys.js';
+import { AI_FEATURES_ENABLED } from '../src/reolink/constants.js';
 
 /**
  * Build a watcher over one device answering a scripted state.
@@ -110,7 +111,10 @@ test('only the AI detections the camera declared are published', async () => {
   watcher.stop();
 });
 
-test('an AI detection fires the image callback', async () => {
+// Skipped while the AI features are held back: with no presence feature to
+// publish to, an AI detection is not watched at all, so there is no callback to
+// fire. The test comes back with the features (see AI_FEATURES_ENABLED).
+test('an AI detection fires the image callback', { skip: !AI_FEATURES_ENABLED }, async () => {
   const device = fakeDevice({ capabilities: 'ai_people' });
   const gladys = fakeGladys({ devices: [device] });
   const captured = [];

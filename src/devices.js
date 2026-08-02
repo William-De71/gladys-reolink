@@ -9,7 +9,8 @@
 //   motion-sensor/binary   motion detection (always);
 //   button/push            the doorbell press (doorbell models);
 //   battery/integer        the battery level (battery models);
-//   presence-sensor/binary person / vehicle / animal AI detections;
+//   presence-sensor/binary person / vehicle / animal AI detections (on hold,
+//                          see AI_FEATURES_ENABLED);
 //   light/binary           the spotlight;
 //   siren/binary           the siren;
 //   switch/binary          the infrared LEDs.
@@ -37,6 +38,7 @@ import {
   CAPABILITIES,
   POLL_FREQUENCY_MS,
   DEFAULT_CHANNEL,
+  AI_FEATURES_ENABLED,
 } from './reolink/constants.js';
 
 /**
@@ -120,6 +122,9 @@ export function getParam(device, name) {
  * motion feature from `GetMdState`, and a second one saying the same thing in a
  * different way would be confusing in the scene editor. "A person was seen" is
  * what a user actually builds a scene on.
+ *
+ * Gated behind `AI_FEATURES_ENABLED` until Gladys can display a
+ * `presence-sensor` + `binary` feature — see that constant.
  */
 const AI_FEATURES = [
   { capability: CAPABILITIES.AI_PEOPLE, suffix: FEATURE_SUFFIXES.AI_PEOPLE, label: 'Person' },
@@ -193,19 +198,22 @@ export function buildFeatures(gladys, camera) {
     });
   }
 
-  AI_FEATURES.filter((entry) => has(entry.capability)).forEach((entry) => {
-    features.push({
-      name: `${camera.name} - ${entry.label}`,
-      external_id: ids.feature(entry.suffix),
-      category: DEVICE_FEATURE_CATEGORIES.PRESENCE_SENSOR,
-      type: DEVICE_FEATURE_TYPES.SENSOR.BINARY,
-      read_only: true,
-      keep_history: true,
-      has_feedback: false,
-      min: 0,
-      max: 1,
+  const aiFeatures = AI_FEATURES_ENABLED ? AI_FEATURES : [];
+  aiFeatures
+    .filter((entry) => has(entry.capability))
+    .forEach((entry) => {
+      features.push({
+        name: `${camera.name} - ${entry.label}`,
+        external_id: ids.feature(entry.suffix),
+        category: DEVICE_FEATURE_CATEGORIES.PRESENCE_SENSOR,
+        type: DEVICE_FEATURE_TYPES.SENSOR.BINARY,
+        read_only: true,
+        keep_history: true,
+        has_feedback: false,
+        min: 0,
+        max: 1,
+      });
     });
-  });
 
   if (has(CAPABILITIES.FLOODLIGHT)) {
     features.push({

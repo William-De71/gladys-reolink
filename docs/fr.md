@@ -42,24 +42,25 @@ Les caméras absentes de cette liste utilisent le compte global.
 
 Chaque caméra reçoit **les fonctionnalités qu'elle possède réellement**. L'intégration interroge la caméra pour le savoir, plutôt que de se fier au nom du modèle : deux caméras d'une même gamme peuvent différer.
 
-| Fonctionnalité                         | Sur quelles caméras                 |
-| -------------------------------------- | ----------------------------------- |
-| Image                                  | Toutes                              |
-| Vidéo en direct                        | Toutes                              |
-| Mouvement                              | Toutes                              |
-| Détection personne / véhicule / animal | Modèles avec détection intelligente |
-| Sonnette                               | Sonnettes vidéo                     |
-| Batterie                               | Modèles sur batterie et solaires    |
-| Projecteur                             | Modèles avec projecteur blanc       |
-| Sirène                                 | Modèles avec haut-parleur d'alarme  |
-| Infrarouge                             | La plupart des modèles              |
-| Position PTZ                           | Caméras motorisées                  |
+| Fonctionnalité  | Sur quelles caméras                |
+| --------------- | ---------------------------------- |
+| Image           | Toutes                             |
+| Vidéo en direct | Toutes                             |
+| Mouvement       | Toutes                             |
+| Sonnette        | Sonnettes vidéo                    |
+| Batterie        | Modèles sur batterie et solaires   |
+| Projecteur      | Modèles avec projecteur blanc      |
+| Sirène          | Modèles avec haut-parleur d'alarme |
+| Infrarouge      | La plupart des modèles             |
+| Position PTZ    | Caméras motorisées                 |
 
 ### Les détections
 
 Les caméras Reolink ne tiennent pas d'historique d'événements : elles indiquent leur **état courant**. Gladys les interroge donc régulièrement, et l'intervalle de vérification est aussi le délai de détection. Il est réglé sur 15 secondes par défaut ; vous pouvez le descendre pour réagir plus vite, au prix d'une sollicitation plus fréquente des caméras.
 
 Une détection déclenche aussi la capture d'une image, pour que le widget montre ce qui s'est passé sans attendre.
+
+> **Détection personne / véhicule / animal.** Les caméras récentes distinguent ces trois types de détection, mais Gladys ne sait pas encore les afficher correctement : elles apparaîtraient comme des fonctionnalités sans nom ni icône. Elles sont donc mises en attente, et reviendront dès que Gladys les prendra en charge. La détection de mouvement, elle, fonctionne sur toutes les caméras.
 
 ### Les positions PTZ
 
