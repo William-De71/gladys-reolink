@@ -74,11 +74,26 @@ Capturer une image est ce qui vide le plus une caméra sur batterie ou solaire. 
 
 - **sous 60 %** : le rafraîchissement automatique s'arrête. Ouvrir le widget ou une détection capture toujours une image ;
 - **sous 40 %** : plus aucune image n'est capturée ;
-- **retour à la normale** à charge complète, ou dès que la caméra est remise en charge.
+- **retour à la normale** dès que la caméra est remise en charge, ou une fois **80 %** atteints en solaire.
+
+Ces 80 % sont volontairement bien au-dessus du seuil de pause : une reprise juste au-dessus relancerait la décharge aussitôt. Évitez de régler ce niveau à 100 % — une caméra solaire se recharge par à-coups et atteint rarement le plein exact, ce qui la laisserait en pause indéfiniment, sans chargeur sur lequel la poser.
 
 Le niveau de batterie et les détections continuent d'être lus dans tous les cas : cela ne coûte presque rien, et c'est ce qui permet de savoir quand la caméra est rechargée.
 
-Les deux seuils sont réglables, et les caméras filaires ne sont jamais concernées.
+Une caméra sur batterie qui **cesse de répondre** — veille profonde, session refusée, réseau coupé — est également ramenée au mode « à la demande » : son dernier niveau connu n'est plus fiable, et une caméra muette a plus de chances d'être vide que pleine.
+
+### Un intervalle de capture propre aux caméras sur batterie
+
+Les caméras sur batterie ont leur **propre intervalle de rafraîchissement**, indépendant de celui des caméras filaires. Espacer les captures d'un modèle solaire ne dégrade donc pas la fraîcheur des images de vos caméras sur secteur.
+
+| Réglage                                                 | Par défaut     | Concerne                       |
+| ------------------------------------------------------- | -------------- | ------------------------------ |
+| Intervalle de rafraîchissement des images               | 60 s           | caméras sur secteur uniquement |
+| Intervalle de rafraîchissement des caméras sur batterie | 900 s (15 min) | caméras sur batterie/solaires  |
+
+C'est le réglage le plus efficace de tous : c'est le **réveil** de la caméra qui coûte de la batterie, bien plus que l'image elle-même. En hiver, ou si votre panneau est peu exposé, allongez cet intervalle et montez le seuil de pause.
+
+Tous les seuils sont réglables, et les caméras filaires ne sont jamais concernées.
 
 ## Questions fréquentes
 

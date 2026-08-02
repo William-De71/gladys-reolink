@@ -74,11 +74,26 @@ Capturing an image is what drains a battery or solar camera the most. The integr
 
 - **below 60%**: the automatic refresh stops. Opening the widget or a detection still captures an image;
 - **below 40%**: no image is captured at all;
-- **back to normal** at a full charge, or as soon as the camera is put back on its charger.
+- **back to normal** as soon as the camera is put back on its charger, or once it reaches **80%** on solar.
+
+That 80% is deliberately well above the pause threshold: resuming just over it would restart the drain immediately. Avoid setting it to 100% — a solar camera charges in bursts and rarely reads exactly full, which would leave it paused for good with no charger to put it on.
 
 The battery level and the detections keep being read in every case: they cost almost nothing, and they are what tells when the camera has recharged.
 
-Both thresholds are configurable, and wired cameras are never affected.
+A battery camera that **stops answering** — deep sleep, refused session, network down — is also brought back to on-demand: its last known level can no longer be trusted, and a silent camera is more likely to be empty than fine.
+
+### A capture interval of their own
+
+Battery cameras have their **own refresh interval**, independent of the wired ones. Spacing out the captures of a solar model therefore costs nothing to the freshness of your mains-powered cameras.
+
+| Setting                         | Default       | Applies to           |
+| ------------------------------- | ------------- | -------------------- |
+| Image refresh interval          | 60s           | wired cameras only   |
+| Battery camera refresh interval | 900s (15 min) | battery/solar models |
+
+This is the single most effective setting: what costs the battery is **waking the camera up**, far more than the image itself. In winter, or if your panel gets little sun, lengthen that interval and raise the pause threshold.
+
+Every threshold is configurable, and wired cameras are never affected.
 
 ## Frequently asked questions
 

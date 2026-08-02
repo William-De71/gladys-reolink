@@ -51,6 +51,64 @@ const sessions = new SessionPool();
 
 let config = normalizeConfig();
 
+/** When each device was last captured, to honour its own refresh interval. */
+const lastCaptureAt = new Map();
+
+/**
+ * Tell whether a device is one of the battery/solar cameras.
+ *
+ * Read from the declared capability rather than from a battery reading: the
+ * capability is known before the camera has ever answered, and it is precisely
+ * the camera that never answers which must not be captured on a loop.
+ * @param {object} device - The Gladys device.
+ * @returns {boolean} True when the battery rules apply.
+ * @example
+ * isBatteryDevice(device);
+ */
+function isBatteryDevice(device) {
+  return (
+    batteryGuard.isBatteryCamera(device.external_id) ||
+    deviceHasCapability(device, CAPABILITIES.BATTERY)
+  );
+}
+
+/**
+ * How long to wait between two automatic captures of a device.
+ *
+ * Battery cameras get their own interval on purpose: the two used to share one
+ * setting, so sparing a solar camera meant letting every wired camera's image go
+ * stale as well. They are unrelated costs and now unrelated settings.
+ * @param {object} device - The Gladys device.
+ * @returns {number} The interval, in seconds.
+ * @example
+ * refreshIntervalFor(device);
+ */
+function refreshIntervalFor(device) {
+  return isBatteryDevice(device)
+    ? config.battery_image_refresh_interval
+    : config.image_refresh_interval;
+}
+
+/**
+ * Tell whether the automatic refresh of a device is due.
+ *
+ * The scheduler ticks far more often than a battery camera should be captured —
+ * `onPoll` alone fires every minute, and it must keep firing to read the
+ * battery, the actuators and the detections. This is what keeps that frequent
+ * tick from turning into a frequent capture.
+ * @param {object} device - The Gladys device.
+ * @returns {boolean} True when enough time has passed.
+ * @example
+ * if (isRefreshDue(device)) { ... }
+ */
+function isRefreshDue(device) {
+  const last = lastCaptureAt.get(device.external_id);
+  if (last === undefined) {
+    return true;
+  }
+  return Date.now() - last >= refreshIntervalFor(device) * 1000;
+}
+
 /**
  * Capture a fresh image of a device and return it in the Gladys format.
  * @param {object} device - The Gladys device.
@@ -66,6 +124,10 @@ async function captureDeviceImage(device) {
   if (!client) {
     throw new Error('REOLINK_CAMERA_ADDRESS_UNKNOWN');
   }
+  // Stamped before the capture: what costs the battery is waking the camera up,
+  // so a capture that then fails still has to count against the interval.
+  // Stamping on success only would let a flaky camera be retried every tick.
+  lastCaptureAt.set(device.external_id, Date.now());
   try {
     return await captureImage(client.api, client.camera, config);
   } catch (e) {
@@ -105,11 +167,14 @@ function isTransportFailure(error) {
  * and a camera answers faster when it is alone — which matters most on the
  * battery models that have to wake up first.
  * @param {object[]} devices - The devices to refresh.
+ * @param {object} [options] - How to run the round.
+ * @param {boolean} [options.force] - Ignore the per-device interval, for a
+ * refresh the user explicitly asked for.
  * @returns {Promise<{ published: number, failures: string[] }>} What happened.
  * @example
  * const { published } = await refreshImages(await gladys.getDevices());
  */
-async function refreshImages(devices) {
+async function refreshImages(devices, { force = false } = {}) {
   const cameras = (devices || []).filter((device) =>
     (device.features || []).some((feature) => feature.category === 'camera'),
   );
@@ -120,7 +185,12 @@ async function refreshImages(devices) {
   for (const device of cameras) {
     // The scheduled refresh is the expensive part, so it is the first thing a
     // draining battery gives up — an explicit request still goes through.
-    if (!batteryGuard.allowsScheduled(device.external_id)) {
+    if (!force && !batteryGuard.allowsScheduled(device.external_id)) {
+      continue;
+    }
+    // Each camera keeps its own pace: a battery model is captured far less often
+    // than a wired one, and the loop ticks at the fastest of the two.
+    if (!force && !isRefreshDue(device)) {
       continue;
     }
     try {
@@ -151,7 +221,13 @@ let refreshTimer = null;
  */
 function startImageRefresh() {
   stopImageRefresh();
-  const intervalSeconds = config.image_refresh_interval;
+  // The loop ticks at the SHORTEST of the two intervals; each camera is then
+  // filtered on its own by `isRefreshDue`. Ticking at the longest one would cap
+  // every wired camera at the battery pace, which is what this split undoes.
+  const intervalSeconds = Math.max(
+    5,
+    Math.min(config.image_refresh_interval, config.battery_image_refresh_interval),
+  );
   refreshTimer = setInterval(async () => {
     try {
       // Re-read the devices every round: a camera may have been added or removed.
@@ -161,7 +237,9 @@ function startImageRefresh() {
       logger.debug(`The image refresh round failed: ${e.message}`);
     }
   }, intervalSeconds * 1000);
-  logger.info(`Refreshing the camera images every ${intervalSeconds}s`);
+  logger.info(
+    `Refreshing the camera images every ${config.image_refresh_interval}s (battery cameras: every ${config.battery_image_refresh_interval}s)`,
+  );
 }
 
 /**
@@ -210,6 +288,14 @@ async function publishDevices() {
 
   const devices = await buildDiscoveredDevices(gladys, config);
   await gladys.publishDiscoveredDevices(devices);
+
+  // Declare the battery models to the guard right away. It must know a camera
+  // runs on battery BEFORE that camera has ever reported a level: a battery
+  // camera that never answers is the one most in need of being spared, and
+  // waiting for a reading is waiting for something that may never come.
+  devices.filter(isBatteryDevice).forEach((device) => {
+    batteryGuard.trackBatteryCamera(device.external_id);
+  });
 
   if (devices.length > 0) {
     await gladys.setConnectionStatus(true).catch(() => {});
@@ -300,21 +386,12 @@ gladys.onPoll(async (device) => {
     return;
   }
 
-  // The dashboard camera widget does NOT ask for a fresh image: it displays the
-  // last one published, and shows an error when none is recent enough. So the
-  // image has to be PUSHED — `onGetImage` alone only covers the live view and
-  // the chat intent, which would leave the widget permanently empty.
-  const hasCamera = (device.features || []).some((feature) => feature.category === 'camera');
-  if (hasCamera && batteryGuard.allowsScheduled(device.external_id)) {
-    try {
-      const image = await captureDeviceImage(device);
-      await gladys.publishCameraImage(device.external_id, image);
-      logger.debug(`Image of "${device.name}" refreshed`);
-    } catch (e) {
-      logger.warn(`Refreshing the image of "${device.name}" failed: ${e.message}`);
-    }
-  }
-
+  // The battery is read FIRST, and the capture decision is taken after it.
+  //
+  // Reading the battery, the actuators and the detections is cheap and is never
+  // gated, while capturing is what drains the cell. Capturing first meant every
+  // decision below was taken against the PREVIOUS round's level — and, on a
+  // camera that had just crossed a threshold, one more capture was let through.
   await publishActuatorStates(device).catch((e) =>
     logger.debug(`Reading the actuators of "${device.name}" failed: ${e.message}`),
   );
@@ -322,6 +399,29 @@ gladys.onPoll(async (device) => {
   await watcher
     .checkDevice(device)
     .catch((e) => logger.debug(`Poll of "${device.name}" failed: ${e.message}`));
+
+  // The dashboard camera widget does NOT ask for a fresh image: it displays the
+  // last one published, and shows an error when none is recent enough. So the
+  // image has to be PUSHED — `onGetImage` alone only covers the live view and
+  // the chat intent, which would leave the widget permanently empty.
+  const hasCamera = (device.features || []).some((feature) => feature.category === 'camera');
+  if (!hasCamera || !batteryGuard.allowsScheduled(device.external_id)) {
+    return;
+  }
+  // This poll IS a scheduled refresh, so it answers to the refresh interval too.
+  // Without this it captured on every tick, pinned at POLL_FREQUENCY_MS, and no
+  // interval setting could slow it down.
+  if (!isRefreshDue(device)) {
+    return;
+  }
+
+  try {
+    const image = await captureDeviceImage(device);
+    await gladys.publishCameraImage(device.external_id, image);
+    logger.debug(`Image of "${device.name}" refreshed`);
+  } catch (e) {
+    logger.warn(`Refreshing the image of "${device.name}" failed: ${e.message}`);
+  }
 });
 
 /**
@@ -506,7 +606,10 @@ gladys.onAction('refresh_images', async () => {
     };
   }
 
-  const { published, failures } = await refreshImages(cameras);
+  // Forced: the user pressed the button, so the per-device interval does not
+  // apply. The battery floor still does — `captureDeviceImage` enforces it, so a
+  // camera below the hard limit reports a failure instead of being captured.
+  const { published, failures } = await refreshImages(cameras, { force: true });
 
   if (failures.length === 0) {
     return {
@@ -525,8 +628,10 @@ gladys.onConfigUpdated(async () => {
   logger.info('onConfigUpdated -> reloading the configuration');
   await publishDevices().catch((e) => logger.error('Re-publish after config update failed', e));
   if (isConfigured(config)) {
-    watcher.start(config);
+    // Thresholds first: the watcher polls straight away, and a tick landing
+    // before the new thresholds were applied would decide on the old ones.
     batteryGuard.configure(config);
+    watcher.start(config);
     startImageRefresh();
   } else {
     watcher.stop();
@@ -541,9 +646,30 @@ gladys.on('connected', async () => {
     const devices = await gladys.getDevices();
     await publishDevices();
     if (isConfigured(config)) {
-      watcher.start(config);
+      // Thresholds before anything captures, and battery models declared before
+      // the startup refresh: a camera the guard does not yet know about would be
+      // captured on the spot, which on a flat cell is the one capture to avoid.
       batteryGuard.configure(config);
+      devices.filter(isBatteryDevice).forEach((device) => {
+        batteryGuard.trackBatteryCamera(device.external_id);
+      });
+      watcher.start(config);
       startImageRefresh();
+
+      // Read the battery of every camera BEFORE the startup capture. At boot the
+      // guard has no readings at all, so without this pass a battery camera is
+      // judged on nothing — and the widget being populated one round sooner is
+      // not worth a capture on a camera that may be nearly empty.
+      await Promise.all(
+        devices.map((device) =>
+          watcher
+            .checkDevice(device)
+            .catch((e) =>
+              logger.debug(`Initial battery read of "${device.name}" failed: ${e.message}`),
+            ),
+        ),
+      );
+
       // Publish a first image right away, so the widget is populated at once
       // instead of waiting a full refresh round.
       await refreshImages(devices);
