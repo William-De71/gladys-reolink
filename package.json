@@ -1,6 +1,6 @@
 {
   "name": "gladys-reolink",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "private": true,
   "description": "External integration to use your Reolink cameras from Gladys Assistant.",
   "type": "module",
