@@ -62,6 +62,28 @@ export function cameraIds(gladys, platformId) {
 }
 
 /**
+ * Tell whether an announced identity actually identifies ONE camera.
+ *
+ * Some firmwares answer `GetDevInfo` with a placeholder serial — empty, all
+ * zeroes, or a single character repeated — which is the same on every camera of
+ * the model. Taking it as the identity gives two cameras one external id, and
+ * Gladys upserts devices on that id: the second camera then overwrites the first
+ * instead of being created. A useless identity must fall through to the MAC.
+ * @param {unknown} value - The announced uid or serial.
+ * @returns {boolean} True when the value can identify one camera.
+ * @example
+ * isUsableIdentity('00000000000000'); // false
+ */
+export function isUsableIdentity(value) {
+  const identity = String(value || '').trim();
+  if (identity.length < 4) {
+    return false;
+  }
+  // A single character repeated (`000…`, `FFF…`) is a placeholder, never a UID.
+  return !/^(.)\1*$/.test(identity);
+}
+
+/**
  * Pick the most stable identity a camera offers.
  *
  * The order matters: a UID never changes, a MAC changes only if the hardware
@@ -74,7 +96,7 @@ export function cameraIds(gladys, platformId) {
  * platformIdOf({ uid: null, mac: 'AA:BB:CC:DD:EE:FF' }); // 'AABBCCDDEEFF'
  */
 export function platformIdOf(camera) {
-  if (camera.uid) {
+  if (isUsableIdentity(camera.uid)) {
     return String(camera.uid).toUpperCase();
   }
   if (camera.mac) {
@@ -369,8 +391,9 @@ export async function resolveCamera(candidate, config) {
       channel: DEFAULT_CHANNEL,
       // `GetDevInfo` carries no UID, so the discovery one is kept; the serial is
       // the fallback for a camera entered by hand, which never went through a
-      // discovery reply.
-      uid: candidate.uid || devInfo.serial || null,
+      // discovery reply. Both are screened: a placeholder serial shared by every
+      // camera of a model would merge them into a single Gladys device.
+      uid: [candidate.uid, devInfo.serial].find(isUsableIdentity) || null,
       mac: candidate.mac || null,
       capabilities,
       codecs,
@@ -430,7 +453,63 @@ export async function buildDiscoveredDevices(gladys, config) {
     [...candidates.values()].map((candidate) => resolveCamera(candidate, config)),
   );
 
-  return cameras.filter((camera) => camera !== null).map((camera) => buildDevice(gladys, camera));
+  const resolved = dedupePlatformIds(cameras.filter((camera) => camera !== null));
+  return resolved.map((camera) => buildDevice(gladys, camera));
+}
+
+/**
+ * Make sure two distinct cameras never carry the same platform id.
+ *
+ * Gladys upserts a device on its `external_id`, so two cameras sharing one id do
+ * not produce two devices: the second overwrites the first, and the user sees
+ * both in the Discovery screen but only one in Devices. That is a silent loss —
+ * the very failure this function turns into a warning plus a distinct id.
+ *
+ * The first camera keeps the contested id, so an installation that already works
+ * does not see its device recreated under a new id; the others fall back to what
+ * still tells them apart, the MAC then the address.
+ * @param {object[]} cameras - The resolved cameras, each carrying a platformId.
+ * @returns {object[]} The same cameras, with unique platform ids.
+ * @example
+ * dedupePlatformIds([camA, camB]);
+ */
+export function dedupePlatformIds(cameras) {
+  /** @type {Map<string, object>} */
+  const taken = new Map();
+
+  cameras.forEach((camera) => {
+    const first = taken.get(camera.platformId);
+    if (!first) {
+      taken.set(camera.platformId, camera);
+      return;
+    }
+
+    // The MAC is per-hardware, the address is at least per-host: either one tells
+    // these two cameras apart when the announced identity did not.
+    const contested = camera.platformId;
+    const address = String(camera.ip || '').replace(/[.:]/g, '-');
+    let fallback = platformIdOf({ uid: null, mac: camera.mac, ip: camera.ip });
+
+    // The MAC may be shared too — the same camera answering on two addresses, or
+    // a MAC read from the wrong interface. The address then has to join the id,
+    // and a counter closes the last gap, because the whole point here is that no
+    // camera is ever dropped for want of a distinct id.
+    if (fallback !== address && taken.has(fallback)) {
+      fallback = `${fallback}-${address}`;
+    }
+    let unique = fallback;
+    for (let suffix = 2; taken.has(unique); suffix += 1) {
+      unique = `${fallback}-${suffix}`;
+    }
+
+    logger.warn(
+      `"${camera.name}" (${camera.ip}) announced the same identity "${contested}" as "${first.name}" (${first.ip}). Using "${unique}" instead, so both cameras exist in Gladys. Check the UID of these cameras in the Reolink app if either one behaves oddly.`,
+    );
+    camera.platformId = unique;
+    taken.set(camera.platformId, camera);
+  });
+
+  return cameras;
 }
 
 /**

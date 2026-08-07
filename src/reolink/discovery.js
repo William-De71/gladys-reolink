@@ -45,7 +45,13 @@ export function parseDiscoveryReply(payload) {
   const text = payload.toString('utf-8');
 
   // Both spellings appear, quoted in JSON or bare in the XML-ish body.
-  const uidMatch = /"?(?:uid|UID)"?\s*[:=>]\s*"?([0-9A-Za-z]{16})"?/.exec(text);
+  //
+  // The key is ANCHORED on its left: an unanchored `uid` also matches the tail of
+  // a longer key (`deviceuid`, `puid`), and such a field is not the camera UID —
+  // it may hold the same value on every camera of a model, which collapses two
+  // cameras onto one external id and makes the second one silently overwrite the
+  // first in Gladys.
+  const uidMatch = /(?:^|[{,\s"<[])"?(?:uid|UID)"?\s*[:=>]\s*"?([0-9A-Za-z]{16})"?/.exec(text);
   const macMatch = /([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})/.exec(text);
   const nameMatch = /"?(?:name|devName)"?\s*[:=>]\s*"([^"<]{1,64})"/.exec(text);
   const ipMatch = /"?(?:ip|IP)"?\s*[:=>]\s*"?((?:\d{1,3}\.){3}\d{1,3})"?/.exec(text);

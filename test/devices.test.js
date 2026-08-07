@@ -8,6 +8,8 @@ import {
   buildDevice,
   deviceHasCapability,
   clientFromDevice,
+  isUsableIdentity,
+  dedupePlatformIds,
 } from '../src/devices.js';
 import { normalizeConfig } from '../src/config.js';
 import { CAPABILITIES, DEVICE_PARAMS, AI_FEATURES_ENABLED } from '../src/reolink/constants.js';
@@ -43,6 +45,77 @@ test('platformIdOf prefers the identity that survives a DHCP change', () => {
   assert.equal(platformIdOf({ mac: 'ec:71:db:11:22:33' }), 'EC71DB112233');
   // Last resort only: an address changes whenever the lease does.
   assert.equal(platformIdOf({ ip: '192.168.1.42' }), '192-168-1-42');
+});
+
+test('a placeholder serial is not accepted as an identity', () => {
+  // Firmwares that answer `GetDevInfo` with a constant serial would give every
+  // camera of the model the same external id — and Gladys upserts on that id.
+  assert.equal(isUsableIdentity('00000000000000'), false);
+  assert.equal(isUsableIdentity('FFFFFFFFFFFFFFFF'), false);
+  assert.equal(isUsableIdentity(''), false);
+  assert.equal(isUsableIdentity('   '), false);
+  assert.equal(isUsableIdentity(null), false);
+  assert.equal(isUsableIdentity('000'), false);
+  assert.equal(isUsableIdentity('95270005ZBCDEFGH'), true);
+});
+
+test('platformIdOf falls through to the MAC when the identity is a placeholder', () => {
+  // The whole point of rejecting the placeholder: the MAC still tells the two
+  // cameras apart, so each one keeps its own device.
+  assert.equal(
+    platformIdOf({ uid: '00000000000000', mac: 'ec:71:db:11:22:33', ip: '192.168.1.42' }),
+    'EC71DB112233',
+  );
+  assert.equal(
+    platformIdOf({ uid: '00000000000000', mac: 'ec:71:db:44:55:66', ip: '192.168.1.43' }),
+    'EC71DB445566',
+  );
+});
+
+test('two cameras announcing one identity still become two devices', () => {
+  // The reported bug: both cameras showed up in Discovery, both were marked as
+  // added, and only one existed in Devices — the second had overwritten the
+  // first, since Gladys upserts a device on its external_id.
+  const cameras = dedupePlatformIds([
+    camera({ name: 'Entrance', ip: '192.168.1.42', mac: 'EC:71:DB:11:22:33' }),
+    camera({ name: 'Garden', ip: '192.168.1.43', mac: 'EC:71:DB:44:55:66' }),
+  ]);
+
+  assert.equal(cameras[0].platformId, 'UID1234567890ABC', 'the first camera keeps its id');
+  assert.equal(cameras[1].platformId, 'EC71DB445566', 'the second one falls back to its MAC');
+  assert.notEqual(cameras[0].platformId, cameras[1].platformId);
+});
+
+test('a contested identity is disambiguated even without a MAC', () => {
+  const cameras = dedupePlatformIds([
+    camera({ name: 'Entrance', ip: '192.168.1.42', mac: null }),
+    camera({ name: 'Garden', ip: '192.168.1.43', mac: null }),
+  ]);
+  assert.equal(cameras[1].platformId, '192-168-1-43');
+});
+
+test('deduping leaves distinct cameras untouched', () => {
+  const cameras = dedupePlatformIds([
+    camera({ name: 'Entrance', platformId: 'UID_A' }),
+    camera({ name: 'Garden', platformId: 'UID_B' }),
+  ]);
+  assert.deepEqual(
+    cameras.map((entry) => entry.platformId),
+    ['UID_A', 'UID_B'],
+  );
+});
+
+test('cameras sharing both an identity and a MAC still all get their own id', () => {
+  // Same MAC on several cameras — the same one answering on two addresses, or a
+  // MAC read from the wrong interface. The invariant is the only thing that
+  // matters here: every camera keeps an id of its own, so none is dropped.
+  const cameras = dedupePlatformIds([
+    camera({ name: 'Entrance', ip: '192.168.1.42', mac: 'EC:71:DB:11:22:33' }),
+    camera({ name: 'Garden', ip: '192.168.1.43', mac: 'EC:71:DB:11:22:33' }),
+    camera({ name: 'Gate', ip: '192.168.1.44', mac: 'EC:71:DB:11:22:33' }),
+  ]);
+  const ids = cameras.map((entry) => entry.platformId);
+  assert.equal(new Set(ids).size, 3, `expected three distinct ids, got ${ids.join(', ')}`);
 });
 
 test('parsePlatformId reads the id back from a device or feature id', () => {

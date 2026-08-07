@@ -36,6 +36,35 @@ test('parseDiscoveryReply reads a reply wrapped in a binary header', () => {
   assert.equal(parsed.mac, 'EC:71:DB:AA:BB:CC');
 });
 
+test('parseDiscoveryReply does not take a longer key ending in "uid" for the UID', () => {
+  // An unanchored `uid` also matched `deviceuid`, `puid`… — fields that may hold
+  // the SAME value on every camera of a model. Two cameras then shared one
+  // external id, and Gladys, which upserts on it, kept only the last one.
+  const first = parseDiscoveryReply(
+    Buffer.from('<devName>Entrance</devName><deviceuid>ABCDEFGH12345678</deviceuid>'),
+  );
+  const second = parseDiscoveryReply(
+    Buffer.from('<devName>Garden</devName><deviceuid>ABCDEFGH12345678</deviceuid>'),
+  );
+  assert.equal(first.uid, null);
+  assert.equal(second.uid, null);
+});
+
+test('parseDiscoveryReply still reads a UID announced under its own key', () => {
+  // The anchoring must not cost the real field, in either envelope.
+  assert.equal(
+    parseDiscoveryReply(Buffer.from('{"uid":"95270005ZBCDEFGH"}')).uid,
+    '95270005ZBCDEFGH',
+  );
+  assert.equal(
+    parseDiscoveryReply(Buffer.from('<uid>95270005ZBCDEFGH</uid>')).uid,
+    '95270005ZBCDEFGH',
+  );
+  assert.equal(parseDiscoveryReply(Buffer.from('uid=95270005ZBCDEFGH')).uid, '95270005ZBCDEFGH');
+  // A UID first in the payload has no character before it to anchor on.
+  assert.equal(parseDiscoveryReply(Buffer.from('UID:95270005ZBCDEFGH')).uid, '95270005ZBCDEFGH');
+});
+
 test('parseDiscoveryReply reports nothing rather than guessing', () => {
   const parsed = parseDiscoveryReply(Buffer.from('unrelated udp traffic'));
   assert.deepEqual(parsed, { uid: null, mac: null, name: null, ip: null });
