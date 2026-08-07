@@ -6,15 +6,19 @@
     "en": "Your Reolink cameras in Gladys: images, detections, spotlight and siren.",
     "fr": "Vos caméras Reolink dans Gladys : images, détections, projecteur et sirène."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/william-de71/gladys-reolink:1.0.0",
+  "version": "1.0.1",
+  "docker_image": "ghcr.io/william-de71/gladys-reolink:1.0.1",
   "gladys_version": ">=4.84.0",
   "cover_image": "https://raw.githubusercontent.com/William-De71/gladys-reolink/master/cover.jpg",
-  "transports": ["local"],
+  "transports": [
+    "local"
+  ],
   "network_discovery": [
     {
       "type": "udp-active-broadcast",
-      "ports": [2000]
+      "ports": [
+        2000
+      ]
     }
   ],
   "config_schema": [
