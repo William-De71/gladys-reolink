@@ -1,3 +1,12 @@
+## [1.1.0](https://github.com/William-De71/gladys-reolink/compare/v1.0.1...v1.1.0) (2026-08-20)
+
+### Features
+
+* support SDK 0.12.0, store categories and automatic changelog ([2106519](https://github.com/William-De71/gladys-reolink/commit/210651936977283fffdb7033c2159baa0210c600))
+
+### Miscellaneous
+
+* restore the manifest formatting broken by release 1.0.1 ([184e7f1](https://github.com/William-De71/gladys-reolink/commit/184e7f16e4c36fbc93b0b0a1bf359519777862d8))
 
 ## [1.0.0](https://github.com/William-De71/gladys-reolink/compare/a7f22308f9e6f027d46ccbff8c5c6206acd55942...v1.0.0) (2026-08-02)
 
