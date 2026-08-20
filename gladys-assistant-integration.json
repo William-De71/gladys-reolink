@@ -15,9 +15,7 @@
   "network_discovery": [
     {
       "type": "udp-active-broadcast",
-      "ports": [
-        2000
-      ]
+      "ports": [2000]
     }
   ],
   "config_schema": [
