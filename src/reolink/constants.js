@@ -95,14 +95,46 @@ export const RTSP_STREAMS = {
 };
 
 /**
- * The channel every standalone camera answers on.
+ * The channel a standalone camera answers on.
  *
- * Reolink numbers the video inputs of an NVR from 0; a camera used on its own
- * only ever has channel 0. NVR and Home Hub support (several channels behind one
- * address) is deliberately out of scope, so this is a constant rather than a
- * per-device param.
+ * Reolink numbers the video inputs from 0, and a camera used on its own only
+ * ever has channel 0. A Home Hub or an NVR puts SEVERAL cameras behind one
+ * address, each on its own channel, so the channel is stored per device (see
+ * `DEVICE_PARAMS.CHANNEL`) and this is only the fallback for a device that
+ * predates that param, or for a camera reached directly.
  */
 export const DEFAULT_CHANNEL = 0;
+
+/**
+ * `exactType`/`type` values of `GetDevInfo` that mean "several cameras behind
+ * this address".
+ *
+ * A Home Hub is an NVR as far as the API is concerned — the difference matters
+ * only for features this integration does not use (recording, HDD), so both are
+ * enumerated the same way. The values come from what the firmware actually
+ * answers; anything else is a plain camera (`IPC`).
+ */
+export const MULTI_CHANNEL_DEVICE_TYPES = ['NVR', 'WIFI_NVR', 'HOMEHUB'];
+
+/**
+ * The `typeInfo` marker that identifies a doorbell behind a hub.
+ *
+ * Behind a hub, `GetAbility` is answered by the HUB, which has no doorbell
+ * button of its own to declare — so the per-channel model string is the only
+ * thing that tells a doorbell from an ordinary camera.
+ */
+export const DOORBELL_MODEL_MARKER = 'Doorbell';
+
+/**
+ * Largest number of channels an answer may declare.
+ *
+ * A firmware that reports a nonsense `count` (or a `channelNum` left at a
+ * placeholder) would otherwise have this integration probe hundreds of channels
+ * on every scan, each one a request to a device that has nothing to answer.
+ * Reolink's largest NVR takes 36 cameras, so this is well clear of any real
+ * installation.
+ */
+export const MAX_CHANNELS = 64;
 
 // --- Device params stored on each Gladys device -------------------------------
 
@@ -119,6 +151,22 @@ export const DEVICE_PARAMS = {
   MODEL: 'REOLINK_MODEL',
   /** Comma-separated list of the capabilities detected on this camera. */
   CAPABILITIES: 'REOLINK_CAPABILITIES',
+  /**
+   * Video channel of this camera on its host.
+   *
+   * Always '0' for a camera reached directly; behind a Home Hub or an NVR it is
+   * what tells the cameras apart, since they all share one address, one port and
+   * one session.
+   */
+  CHANNEL: 'REOLINK_CHANNEL',
+  /**
+   * UID of the HOST this camera answers through, when it is not the camera
+   * itself. Empty for a direct camera, the hub UID for a camera behind one.
+   *
+   * Kept so a camera whose own identity is unreadable can still derive a stable
+   * id from its host plus its channel.
+   */
+  HOST_UID: 'REOLINK_HOST_UID',
   /**
    * Stream URL read by the rtsp-camera service to serve the live view. The name
    * is imposed by that service, which is why it carries no REOLINK_ prefix.

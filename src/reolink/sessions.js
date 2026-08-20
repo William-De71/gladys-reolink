@@ -16,6 +16,14 @@
 // it. The token inside it renews itself (see api.js), so a long-lived client
 // costs nothing to keep — and one session per camera is exactly what the
 // firmware is comfortable with.
+//
+// A Home Hub makes that sharing MORE valuable, not less: its five cameras all
+// answer through one address, so they get one session between them rather than
+// five. But they must not share the CAMERA description that travels with it —
+// each one has its own channel, name and capabilities, and handing the same
+// object to all five would point every command at whichever camera was resolved
+// last. So the API client is keyed by address, and the camera by address AND
+// channel.
 // -----------------------------------------------------------------------------
 
 import { logger } from '@gladysassistant/integration-sdk';
@@ -46,7 +54,9 @@ export function credentialsOf(config) {
  */
 export class SessionPool {
   constructor() {
-    /** @type {Map<string, object>} One `{ api, camera }` per address. */
+    /** @type {Map<string, object>} One API client per address — one session. */
+    this.apis = new Map();
+    /** @type {Map<string, object>} One `{ api, camera }` per address+channel. */
     this.clients = new Map();
     /** Fingerprint of the credentials the held clients were built with. */
     this.credentials = null;
@@ -77,13 +87,26 @@ export class SessionPool {
       return null;
     }
 
-    let client = this.clients.get(ip);
+    // Address AND channel: behind a hub, five devices share this address and
+    // each needs its own camera description.
+    const key = `${ip}:${getParam(device, DEVICE_PARAMS.CHANNEL) || '0'}`;
+
+    let client = this.clients.get(key);
     if (!client) {
       client = clientFromDevice(device, config);
       if (!client) {
         return null;
       }
-      this.clients.set(ip, client);
+      // The session belongs to the ADDRESS: a hub only tolerates a handful, and
+      // one per camera behind it would exhaust them. So the first camera to be
+      // built opens it and the others reuse it.
+      const held = this.apis.get(ip);
+      if (held) {
+        client.api = held;
+      } else {
+        this.apis.set(ip, client.api);
+      }
+      this.clients.set(key, client);
     }
     // The device may have been renamed in Gladys since the client was built, and
     // the name is what every log line about this camera uses.
@@ -102,9 +125,15 @@ export class SessionPool {
    */
   drop(device) {
     const ip = getParam(device, DEVICE_PARAMS.IP);
-    if (ip) {
-      this.clients.delete(ip);
+    if (!ip) {
+      return;
     }
+    // The SESSION is what went bad, and it is shared by every camera on this
+    // address — so all of them are dropped, not just the one that noticed.
+    this.apis.delete(ip);
+    [...this.clients.keys()]
+      .filter((key) => key.startsWith(`${ip}:`))
+      .forEach((key) => this.clients.delete(key));
   }
 
   /**
@@ -117,9 +146,13 @@ export class SessionPool {
    * sessions.reset();
    */
   reset() {
-    this.clients.forEach(({ api }) => {
+    // Iterating the APIs rather than the clients logs out ONCE per address, not
+    // once per camera behind it — the extra logouts would be refused anyway,
+    // since the first one already invalidated the shared token.
+    this.apis.forEach((api) => {
       api.logout().catch((e) => logger.debug(`Logging out of ${api.ip} failed: ${e.message}`));
     });
+    this.apis.clear();
     this.clients.clear();
   }
 }

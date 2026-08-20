@@ -83,6 +83,7 @@ export function fakeDevice({
   https = false,
   capabilities = '',
   features = [],
+  channel = 0,
 } = {}) {
   return {
     name,
@@ -95,6 +96,7 @@ export function fakeDevice({
       { name: 'REOLINK_UID', value: platformId },
       { name: 'REOLINK_MODEL', value: 'RLC-810A' },
       { name: 'REOLINK_CAPABILITIES', value: capabilities },
+      { name: 'REOLINK_CHANNEL', value: String(channel) },
     ],
   };
 }

@@ -117,3 +117,67 @@ test('a renamed device updates the name its logs use', () => {
   const client = pool.for(fakeDevice({ name: 'Front garden' }), config);
   assert.equal(client.camera.name, 'Front garden');
 });
+
+test('two cameras behind one hub share the session but not the camera', () => {
+  // Sharing the SESSION is the point: a hub tolerates a handful, and one per
+  // camera behind it would exhaust them. Sharing the CAMERA would be a bug —
+  // every command would target whichever channel was resolved last.
+  const pool = new SessionPool();
+  const config = normalizeConfig({ password: 'secret' });
+
+  const garden = pool.for(
+    fakeDevice({ platformId: 'UID1', ip: '192.168.1.50', channel: 0 }),
+    config,
+  );
+  const gate = pool.for(fakeDevice({ platformId: 'UID2', ip: '192.168.1.50', channel: 2 }), config);
+
+  assert.equal(garden.api, gate.api);
+  assert.notEqual(garden.camera, gate.camera);
+  assert.equal(garden.camera.channel, 0);
+  assert.equal(gate.camera.channel, 2);
+});
+
+test('a camera behind a hub keeps its own client across calls', () => {
+  const pool = new SessionPool();
+  const config = normalizeConfig({ password: 'secret' });
+  const device = fakeDevice({ platformId: 'UID2', ip: '192.168.1.50', channel: 2 });
+
+  assert.equal(pool.for(device, config), pool.for(device, config));
+});
+
+test('dropping one camera of a hub drops the whole shared session', () => {
+  // The session is what went bad, and it belongs to the ADDRESS. Keeping the
+  // other cameras on a token the hub already forgot only wastes the next round.
+  const pool = new SessionPool();
+  const config = normalizeConfig({ password: 'secret' });
+
+  const gardenDevice = fakeDevice({ platformId: 'UID1', ip: '192.168.1.50', channel: 0 });
+  const gateDevice = fakeDevice({ platformId: 'UID2', ip: '192.168.1.50', channel: 2 });
+  const garden = pool.for(gardenDevice, config);
+  pool.for(gateDevice, config);
+
+  pool.drop(gateDevice);
+
+  assert.notEqual(pool.for(gardenDevice, config), garden);
+});
+
+test('a hub is logged out once, not once per camera behind it', () => {
+  // The extra logouts would be refused anyway: the first one already
+  // invalidated the token they all share.
+  const pool = new SessionPool();
+  const config = normalizeConfig({ password: 'secret' });
+
+  pool.for(fakeDevice({ platformId: 'UID1', ip: '192.168.1.50', channel: 0 }), config);
+  pool.for(fakeDevice({ platformId: 'UID2', ip: '192.168.1.50', channel: 1 }), config);
+  pool.for(fakeDevice({ platformId: 'UID3', ip: '192.168.1.50', channel: 2 }), config);
+
+  let logouts = 0;
+  pool.apis.forEach((api) => {
+    api.logout = async () => {
+      logouts += 1;
+    };
+  });
+  pool.reset();
+
+  assert.equal(logouts, 1);
+});

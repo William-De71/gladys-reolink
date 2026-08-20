@@ -234,15 +234,20 @@ export class EventWatcher {
    * const states = await watcher.readStates(device, client);
    */
   async readStates(device, client) {
+    // The channel of THIS camera, never a constant: behind a hub the same
+    // address answers for every camera, and a wrong channel silently returns the
+    // state of another one — five cameras all reporting the motion of the first.
+    const channel = client.camera.channel ?? DEFAULT_CHANNEL;
+
     const commands = [
-      { cmd: 'GetMdState', action: 0, param: { channel: DEFAULT_CHANNEL } },
-      { cmd: 'GetAiState', action: 0, param: { channel: DEFAULT_CHANNEL } },
+      { cmd: 'GetMdState', action: 0, param: { channel } },
+      { cmd: 'GetAiState', action: 0, param: { channel } },
     ];
     if (deviceHasCapability(device, CAPABILITIES.BATTERY)) {
-      commands.push({ cmd: 'GetBatteryInfo', action: 0, param: { channel: DEFAULT_CHANNEL } });
+      commands.push({ cmd: 'GetBatteryInfo', action: 0, param: { channel } });
     }
     if (deviceHasCapability(device, CAPABILITIES.DOORBELL)) {
-      commands.push({ cmd: 'GetAlarm', action: 0, param: { channel: DEFAULT_CHANNEL } });
+      commands.push({ cmd: 'GetAlarm', action: 0, param: { channel } });
     }
 
     let answers;

@@ -10,8 +10,10 @@ import {
   clientFromDevice,
   isUsableIdentity,
   dedupePlatformIds,
+  channelPlatformId,
 } from '../src/devices.js';
 import { normalizeConfig } from '../src/config.js';
+import { buildRtspUrl } from '../src/reolink/rtsp.js';
 import { CAPABILITIES, DEVICE_PARAMS, AI_FEATURES_ENABLED } from '../src/reolink/constants.js';
 import { fakeGladys, fakeDevice } from './helpers/fakeGladys.js';
 
@@ -258,4 +260,73 @@ test('clientFromDevice refuses a device with no address', () => {
   const device = fakeDevice();
   device.params = device.params.filter((param) => param.name !== DEVICE_PARAMS.IP);
   assert.equal(clientFromDevice(device, normalizeConfig({ password: 'x' })), null);
+});
+
+test('a camera behind a hub is identified by its own UID', () => {
+  // The channel number alone would be a terrible identity: it is a POSITION,
+  // and a camera re-paired to a hub commonly lands on a different one — every
+  // Gladys device would then point at the wrong camera, silently.
+  const host = { uid: 'HUBUID0123456789', ip: '192.168.1.50' };
+  assert.equal(
+    channelPlatformId({ channel: 2, uid: '95270005ZBCDEFGH' }, host),
+    '95270005ZBCDEFGH',
+  );
+});
+
+test('a camera whose hub hides its UID derives one from the host and channel', () => {
+  // Stable as long as nothing is re-paired, which is the best a firmware that
+  // omits the per-channel UID allows — and far better than the `-2` suffix the
+  // dedupe would otherwise hand out, which depends on resolution ORDER.
+  const host = { uid: 'HUBUID0123456789', ip: '192.168.1.50' };
+  assert.equal(channelPlatformId({ channel: 0, uid: null }, host), 'HUBUID0123456789-ch0');
+  assert.equal(channelPlatformId({ channel: 3, uid: null }, host), 'HUBUID0123456789-ch3');
+  // A placeholder UID shared by every camera of a model must not be trusted
+  // either: it would merge them all into one Gladys device.
+  assert.equal(channelPlatformId({ channel: 1, uid: '0000000000' }, host), 'HUBUID0123456789-ch1');
+});
+
+test('two cameras behind one hub never collapse into a single device', () => {
+  // The failure this guards against is silent: Gladys upserts on the external
+  // id, so the second camera would overwrite the first and the user would see
+  // four cameras in Discovery but one in Devices.
+  const host = { uid: 'HUBUID0123456789', ip: '192.168.1.50' };
+  const ids = [0, 1, 2, 3].map((channel) => channelPlatformId({ channel, uid: null }, host));
+  assert.equal(new Set(ids).size, 4);
+});
+
+test('the channel is stored on the device, since a hub shares everything else', () => {
+  // Address, port and session are common to every camera behind a hub; the
+  // channel is the only thing that tells them apart on the next restart.
+  const device = buildDevice(gladys, camera({ channel: 2, hostUid: 'HUBUID0123456789' }));
+  assert.equal(getParam(device, DEVICE_PARAMS.CHANNEL), '2');
+  assert.equal(getParam(device, DEVICE_PARAMS.HOST_UID), 'HUBUID0123456789');
+});
+
+test('a device created before hub support still works', () => {
+  // It carries no channel param, and channel 0 is exactly right for it: it
+  // could only ever have been a camera reached directly.
+  const device = fakeDevice();
+  device.params = device.params.filter((param) => param.name !== DEVICE_PARAMS.CHANNEL);
+
+  const { camera: rebuilt } = clientFromDevice(device, normalizeConfig({ password: 'secret' }));
+  assert.equal(rebuilt.channel, 0);
+});
+
+test('a camera behind a hub is rebuilt on its own channel', () => {
+  // Getting this wrong points every command at whichever camera sits on channel
+  // 0 — five cameras all reporting the motion of the first.
+  const device = fakeDevice({ channel: 3 });
+  const { camera: rebuilt } = clientFromDevice(device, normalizeConfig({ password: 'secret' }));
+  assert.equal(rebuilt.channel, 3);
+});
+
+test('the RTSP url of a camera behind a hub names its own channel', () => {
+  // The path is 1-based and zero-padded, unlike every other channel number in
+  // this API; naming the wrong one yields "404 stream not found".
+  const url = buildRtspUrl(camera({ channel: 2 }), { username: 'admin', password: 'secret' });
+  assert.match(url, /Preview_03_main$/);
+  // The five cameras of a hub share one address, so the channel is the ONLY
+  // thing separating their streams.
+  const other = buildRtspUrl(camera({ channel: 0 }), { username: 'admin', password: 'secret' });
+  assert.match(other, /Preview_01_main$/);
 });

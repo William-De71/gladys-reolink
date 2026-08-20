@@ -30,6 +30,7 @@ import { ReolinkApi, ReolinkAuthError } from './reolink/api.js';
 import { resolveCapabilities } from './reolink/capabilities.js';
 import { buildRtspUrl, readCodecs } from './reolink/rtsp.js';
 import { discoverCameras } from './reolink/discovery.js';
+import { listChannels, isMultiChannelHost } from './reolink/channels.js';
 import { resolveAccount } from './config.js';
 import {
   EXTERNAL_ID_TYPE,
@@ -330,6 +331,10 @@ export function buildDevice(gladys, camera) {
       { name: DEVICE_PARAMS.UID, value: camera.uid || '' },
       { name: DEVICE_PARAMS.MODEL, value: camera.model || '' },
       { name: DEVICE_PARAMS.CAPABILITIES, value: (camera.capabilities || []).join(',') },
+      // Behind a Home Hub or an NVR, this is what tells the cameras apart: they
+      // share the address, the port and the session, and differ only here.
+      { name: DEVICE_PARAMS.CHANNEL, value: String(camera.channel ?? DEFAULT_CHANNEL) },
+      { name: DEVICE_PARAMS.HOST_UID, value: camera.hostUid || '' },
       // The live view of the dashboard widget calls the rtsp-camera service,
       // which streams ANY device carrying a CAMERA_URL param — whatever service
       // owns it. Publishing the RTSP URL here is therefore what unlocks the live
@@ -341,19 +346,128 @@ export function buildDevice(gladys, camera) {
 }
 
 /**
+ * Build the platform id of one camera behind a multi-channel host.
+ *
+ * The channel number alone would be a terrible identity: it is a POSITION, and
+ * a camera re-paired to a hub commonly lands on a different one — every Gladys
+ * device would then point at the wrong camera, silently.
+ *
+ * So the camera's own UID is used whenever the hub announces one. When it does
+ * not, the identity falls back to the HOST plus the channel: stable as long as
+ * nothing is re-paired, which is the best a firmware that hides the UID allows.
+ * @param {object} entry - The channel, from `listChannels`.
+ * @param {object} host - The host, as `{ uid, mac, ip }`.
+ * @returns {string} The platform id.
+ * @example
+ * channelPlatformId({ channel: 1, uid: null }, { uid: 'HUBUID0123456789' });
+ */
+export function channelPlatformId(entry, host) {
+  if (isUsableIdentity(entry.uid)) {
+    return String(entry.uid).toUpperCase();
+  }
+  return `${platformIdOf(host)}-ch${entry.channel}`;
+}
+
+/**
+ * Resolve ONE camera sitting on one channel of a host.
+ *
+ * Every command here names its channel: behind a hub the same address answers
+ * for every camera, and a missing channel silently returns the state of the
+ * first one — which is how five cameras end up all reporting the motion of one.
+ * @param {object} context - The host context.
+ * @param {object} context.api - The API client of the host.
+ * @param {object} context.candidate - What discovery knew about the address.
+ * @param {object} context.devInfo - The `DevInfo` of the host.
+ * @param {object} context.account - The credentials for this address.
+ * @param {boolean} context.multiChannel - Whether the host fronts several cameras.
+ * @param {object} config - The normalized configuration.
+ * @param {object} entry - The channel, from `listChannels`.
+ * @returns {Promise<object|null>} The resolved camera, or null.
+ * @example
+ * await resolveChannel(context, config, { channel: 1 });
+ */
+export async function resolveChannel(
+  { api, candidate, devInfo, account, multiChannel },
+  config,
+  entry,
+) {
+  const { channel } = entry;
+
+  // `GetAbility` is answered by the HOST, not by the camera on this channel, so
+  // its per-channel `abilityChn[channel]` block is what actually describes this
+  // camera. `resolveCapabilities` already looks there.
+  const [ability, aiState] = await Promise.all([
+    api.getAbility(),
+    api.send('GetAiState', { channel }),
+  ]);
+
+  const capabilities = resolveCapabilities({ ability, aiState, devInfo, channel });
+
+  // Behind a hub the doorbell cannot be read from abilities: the hub declares
+  // its own, and it has no button. The per-channel model string is the only
+  // marker left.
+  if (entry.isDoorbell && !capabilities.includes(CAPABILITIES.DOORBELL)) {
+    capabilities.push(CAPABILITIES.DOORBELL);
+  }
+
+  const codecs = await readCodecs(api, channel);
+
+  const host = {
+    uid: [candidate.uid, devInfo.serial].find(isUsableIdentity) || null,
+    mac: candidate.mac || null,
+    ip: candidate.ip,
+  };
+
+  const camera = {
+    // Behind a hub, the name of the CHANNEL is the one the user set in the
+    // Reolink app for that camera; `devInfo.name` is the hub's own name, which
+    // would label all five cameras identically.
+    name:
+      entry.name ||
+      (multiChannel
+        ? `${devInfo.name || 'Reolink'} - channel ${channel + 1}`
+        : devInfo.name || candidate.name || `Reolink ${candidate.ip}`),
+    model: entry.model || devInfo.model || '',
+    ip: candidate.ip,
+    port: api.port,
+    https: api.https,
+    channel,
+    // The hub answers for a sleeping camera, so this is known here and worth
+    // carrying: it decides whether the camera may be talked to at all.
+    sleeping: entry.sleeping,
+    uid: multiChannel ? entry.uid : host.uid,
+    hostUid: multiChannel ? host.uid : null,
+    mac: multiChannel ? null : host.mac,
+    capabilities,
+    codecs,
+  };
+
+  camera.platformId = multiChannel ? channelPlatformId(entry, host) : platformIdOf(camera);
+  camera.streamUrl = buildRtspUrl(camera, account, config.stream_quality);
+
+  logger.info(
+    `"${camera.name}" (${camera.model} at ${camera.ip}${multiChannel ? `, channel ${channel}` : ''}) offers: ${capabilities.join(', ') || 'image and motion only'}`,
+  );
+  return camera;
+}
+
+/**
  * Ask one address who it is and what it can do.
  *
  * This is the only place that talks to a camera during discovery, and it is
  * deliberately tolerant: an address that does not answer, or answers something
- * that is not a Reolink API, yields null rather than failing the whole scan —
- * the network may well hold devices that are not cameras.
+ * that is not a Reolink API, yields an empty list rather than failing the whole
+ * scan — the network may well hold devices that are not cameras.
+ *
+ * One address may yield SEVERAL cameras: a Home Hub or an NVR fronts one camera
+ * per channel, all sharing this address, port and session.
  * @param {object} candidate - `{ ip, port, uid, mac, name }`.
  * @param {object} config - The normalized configuration.
- * @returns {Promise<object|null>} The resolved camera, or null.
+ * @returns {Promise<object[]>} The resolved cameras, possibly empty.
  * @example
- * const camera = await resolveCamera({ ip: '192.168.1.42' }, config);
+ * const cameras = await resolveCameras({ ip: '192.168.1.42' }, config);
  */
-export async function resolveCamera(candidate, config) {
+export async function resolveCameras(candidate, config) {
   const account = resolveAccount(config, candidate.ip);
   const api = new ReolinkApi({
     ip: candidate.ip,
@@ -364,47 +478,32 @@ export async function resolveCamera(candidate, config) {
   });
 
   try {
-    // One batch rather than three round trips: identity, abilities and AI
-    // support are all needed before a single feature can be decided.
-    const [devInfo, ability, aiState] = await Promise.all([
-      api.getDevInfo(),
-      api.getAbility(),
-      api.send('GetAiState', { channel: DEFAULT_CHANNEL }),
-    ]);
-
+    const devInfo = await api.getDevInfo();
     if (!devInfo) {
       logger.debug(`${candidate.ip} answered, but not like a Reolink camera`);
-      return null;
+      return [];
     }
 
-    const capabilities = resolveCapabilities({ ability, aiState, devInfo });
-    const codecs = await readCodecs(api);
+    const multiChannel = isMultiChannelHost(devInfo);
+    const channels = await listChannels(api, devInfo);
+    const context = { api, candidate, devInfo, account, multiChannel };
 
-    const camera = {
-      // The name the user gave the camera in the Reolink app beats the one the
-      // discovery reply carried: it is what they will look for in Gladys.
-      name: devInfo.name || candidate.name || `Reolink ${candidate.ip}`,
-      model: devInfo.model || '',
-      ip: candidate.ip,
-      port: api.port,
-      https: api.https,
-      channel: DEFAULT_CHANNEL,
-      // `GetDevInfo` carries no UID, so the discovery one is kept; the serial is
-      // the fallback for a camera entered by hand, which never went through a
-      // discovery reply. Both are screened: a placeholder serial shared by every
-      // camera of a model would merge them into a single Gladys device.
-      uid: [candidate.uid, devInfo.serial].find(isUsableIdentity) || null,
-      mac: candidate.mac || null,
-      capabilities,
-      codecs,
-    };
-    camera.platformId = platformIdOf(camera);
-    camera.streamUrl = buildRtspUrl(camera, account, config.stream_quality);
-
-    logger.info(
-      `"${camera.name}" (${camera.model} at ${camera.ip}) offers: ${capabilities.join(', ') || 'image and motion only'}`,
-    );
-    return camera;
+    // Sequential on purpose, unlike the per-address parallelism above: these
+    // all share ONE session on ONE device, and firing a dozen batches at a hub
+    // is how its firmware starts refusing commands mid-scan.
+    const cameras = [];
+    for (const entry of channels) {
+      try {
+        cameras.push(await resolveChannel(context, config, entry));
+      } catch (e) {
+        // One unreadable camera must not cost the others: a hub commonly holds
+        // one camera that is out of range while the rest answer fine.
+        logger.warn(
+          `The camera on channel ${entry.channel} of ${candidate.ip} could not be identified: ${e.message}`,
+        );
+      }
+    }
+    return cameras;
   } catch (e) {
     if (e instanceof ReolinkAuthError) {
       // Worth a warning rather than a debug line: the camera IS there and the
@@ -415,7 +514,7 @@ export async function resolveCamera(candidate, config) {
     } else {
       logger.debug(`${candidate.ip} could not be identified: ${e.message}`);
     }
-    return null;
+    return [];
   } finally {
     await api.logout().catch(() => {});
   }
@@ -447,13 +546,14 @@ export async function buildDiscoveredDevices(gladys, config) {
     candidates.set(entry.ip, { ...candidates.get(entry.ip), ip: entry.ip, port: entry.port });
   });
 
-  // Identifying is I/O bound and independent per camera, so resolve them
-  // together rather than paying the timeout of each unreachable address in turn.
-  const cameras = await Promise.all(
-    [...candidates.values()].map((candidate) => resolveCamera(candidate, config)),
+  // Identifying is I/O bound and independent per ADDRESS, so resolve them
+  // together rather than paying the timeout of each unreachable one in turn.
+  // One address may yield several cameras when a Home Hub or an NVR fronts them.
+  const perAddress = await Promise.all(
+    [...candidates.values()].map((candidate) => resolveCameras(candidate, config)),
   );
 
-  const resolved = dedupePlatformIds(cameras.filter((camera) => camera !== null));
+  const resolved = dedupePlatformIds(perAddress.flat().filter((camera) => camera !== null));
   return resolved.map((camera) => buildDevice(gladys, camera));
 }
 
@@ -531,12 +631,18 @@ export function clientFromDevice(device, config) {
   const https = getParam(device, DEVICE_PARAMS.HTTPS) === '1';
   const account = resolveAccount(config, ip);
 
+  // A device created before hub support carries no channel param; channel 0 is
+  // exactly right for it, since it could only ever have been a direct camera.
+  const storedChannel = Number(getParam(device, DEVICE_PARAMS.CHANNEL));
+  const channel =
+    Number.isInteger(storedChannel) && storedChannel >= 0 ? storedChannel : DEFAULT_CHANNEL;
+
   const camera = {
     name: device.name || 'Reolink camera',
     ip,
     port,
     https,
-    channel: DEFAULT_CHANNEL,
+    channel,
     model: getParam(device, DEVICE_PARAMS.MODEL) || '',
     uid: getParam(device, DEVICE_PARAMS.UID) || '',
     capabilities: (getParam(device, DEVICE_PARAMS.CAPABILITIES) || '')

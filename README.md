@@ -58,9 +58,19 @@ npm run format    # prettier
 
 **The RTSP path is not mechanical.** The channel is 1-based and zero-padded there (`01`) while every JSON command numbers it from 0, and the codec is part of the path — a recent camera serves h265 on its main stream, so `GetEnc` is asked rather than assumed.
 
+**A Home Hub is one address holding several cameras.** A hub (or an NVR) answers for every camera paired with it, each on its own `channel`, behind one address, one port and one session. `GetChannelstatus` enumerates them, and each one becomes its own Gladys device.
+
+Three things make that more than a loop:
+
+- **Identity.** The channel number is a POSITION, not an identity — a camera re-paired to a hub commonly lands on a different one, and devices keyed by channel would silently point at the wrong camera. The per-channel UID is used when the hub announces one, which not every firmware does; the fallback derives a stable id from the host plus the channel.
+- **The session is shared, the camera is not.** All the cameras of a hub go through one session — the firmware only tolerates a handful — but each needs its own channel, name and capabilities. Handing them one description would point every command at whichever camera was resolved last.
+- **Sleep beats the battery level.** A hub reports whether each battery camera is asleep and answers on its behalf while it is. Waking a camera costs far more than the request itself, so a sleeping one is excluded from the scheduled refresh whatever its level — while an explicit request still goes through. Nobody minds waking a camera to look at it; everybody minds a timer doing it every 30 seconds.
+
+The doorbell is a special case there: behind a hub, `GetAbility` is answered by the hub, which has no button to declare, so the per-channel model string is the only marker left.
+
 ## Not covered
 
-NVR and Home Hub devices, which expose several cameras behind one address. The API supports it through the `channel` parameter — every call here already carries one — but the device model, discovery and configuration would need to represent a multi-camera host, which is a separate piece of work.
+Recording and playback of what a hub or an NVR stored on its disk. This integration reads live state and captures images; the stored timeline is a separate piece of work.
 
 ## License
 
