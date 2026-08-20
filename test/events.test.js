@@ -240,3 +240,86 @@ test('a camera that stops answering drops its client so the next round reconnect
   await watcher.checkDevice(device);
   assert.equal(sessions.dropped, 1, 'a dead session must be dropped, not reused');
 });
+
+test('a camera behind a hub is polled on its own channel', () => {
+  // Getting this wrong is the classic hub failure: every command lands on
+  // channel 0, and five cameras all report the motion of the first.
+  const device = fakeDevice({ channel: 3 });
+  const gladys = fakeGladys({ devices: [device] });
+  const api = fakeApi({ GetMdState: { state: 1 } });
+  const sessions = fakeSessions({ api, camera: { name: device.name, channel: 3 } });
+  const watcher = new EventWatcher({ gladys, sessions });
+  watcher.config = { capture_timeout: 10 };
+
+  return watcher.checkDevice(device).then(() => {
+    api.batches[0].forEach((command) => {
+      assert.equal(command.param.channel, 3);
+    });
+  });
+});
+
+test('one command answers the sleep state of every camera behind a hub', async () => {
+  // Asking each battery camera whether it is awake would WAKE it — which is
+  // exactly what reading this is meant to prevent.
+  const garden = fakeDevice({ platformId: 'UID1', ip: '192.168.1.50', channel: 0 });
+  const gate = fakeDevice({ platformId: 'UID2', ip: '192.168.1.50', channel: 1 });
+  const gladys = fakeGladys({ devices: [garden, gate] });
+  const api = fakeApi({
+    GetChannelstatus: {
+      count: 2,
+      status: [
+        { channel: 0, online: 1, sleep: 1 },
+        { channel: 1, online: 1, sleep: 0 },
+      ],
+    },
+  });
+  const guard = new BatteryGuard();
+  const watcher = new EventWatcher({
+    gladys,
+    batteryGuard: guard,
+    sessions: fakeSessions({ api, camera: { name: 'Hub', channel: 0 } }),
+  });
+  watcher.config = { capture_timeout: 10 };
+
+  await watcher.refreshSleepStates([garden, gate]);
+
+  assert.equal(api.batches.length, 1);
+  assert.equal(guard.isSleeping(garden.external_id), true);
+  assert.equal(guard.isSleeping(gate.external_id), false);
+});
+
+test('a camera reached directly is never asked whether it sleeps', async () => {
+  // It has no hub to answer for it, so the question would wake the very camera
+  // it is meant to leave alone.
+  const device = fakeDevice({ channel: 0 });
+  const gladys = fakeGladys({ devices: [device] });
+  const api = fakeApi({ GetChannelstatus: { count: 1, status: [{ channel: 0, sleep: 1 }] } });
+  const watcher = new EventWatcher({
+    gladys,
+    batteryGuard: new BatteryGuard(),
+    sessions: fakeSessions({ api, camera: { name: device.name, channel: 0 } }),
+  });
+  watcher.config = { capture_timeout: 10 };
+
+  await watcher.refreshSleepStates([device]);
+  assert.equal(api.batches.length, 0);
+});
+
+test('a sleeping camera is not polled at all', async () => {
+  // Its hub already said it has nothing new to report, and every command would
+  // wake its radio for nothing.
+  const device = fakeDevice({ channel: 1 });
+  const gladys = fakeGladys({ devices: [device] });
+  const api = fakeApi({ GetMdState: { state: 1 } });
+  const guard = new BatteryGuard();
+  guard.setSleeping(device.external_id, true);
+  const watcher = new EventWatcher({
+    gladys,
+    batteryGuard: guard,
+    sessions: fakeSessions({ api, camera: { name: device.name, channel: 1 } }),
+  });
+  watcher.config = { capture_timeout: 10 };
+
+  await watcher.checkDevice(device);
+  assert.equal(api.batches.length, 0);
+});

@@ -20,13 +20,15 @@
 // -----------------------------------------------------------------------------
 
 import { logger } from '@gladysassistant/integration-sdk';
-import { cameraIds, parsePlatformId, deviceHasCapability } from '../devices.js';
+import { cameraIds, parsePlatformId, deviceHasCapability, getParam } from '../devices.js';
 import { aiStateOf, aiTypesOf } from './capabilities.js';
+import { readSleepStates } from './channels.js';
 import {
   FEATURE_SUFFIXES,
   CAPABILITIES,
   DETECTION_RESET_MS,
   DEFAULT_CHANNEL,
+  DEVICE_PARAMS,
   AI_FEATURES_ENABLED,
 } from './constants.js';
 
@@ -167,6 +169,11 @@ export class EventWatcher {
     this.running = true;
     try {
       const devices = this.gladys.devices || [];
+      // Before anything else: which cameras behind a hub are asleep. One command
+      // per hub answers for all of them, and it is what keeps the rest of this
+      // round from waking a battery camera to ask it questions its hub could
+      // have answered.
+      await this.refreshSleepStates(devices);
       // Cameras are checked together: one slow camera would otherwise delay
       // every other one, and the round would outlast its own interval.
       await Promise.all(
@@ -182,6 +189,65 @@ export class EventWatcher {
   }
 
   /**
+   * Ask each hub which of its cameras are asleep, and tell the guard.
+   *
+   * Grouped by address: a hub answers for ALL its cameras in one command, so
+   * five devices cost one request. Devices reached directly are skipped
+   * entirely — they have no hub to answer for them, and asking would wake the
+   * very camera this is meant to leave alone.
+   * @param {object[]} devices - The Gladys devices.
+   * @returns {Promise<void>} Resolves once the guard is up to date.
+   * @example
+   * await watcher.refreshSleepStates(gladys.devices);
+   */
+  async refreshSleepStates(devices) {
+    if (!this.batteryGuard) {
+      return;
+    }
+
+    /** @type {Map<string, object[]>} Devices sharing one address. */
+    const hosts = new Map();
+    devices.forEach((device) => {
+      if (!parsePlatformId(device.external_id)) {
+        return;
+      }
+      const ip = getParam(device, DEVICE_PARAMS.IP);
+      // A device on channel 0 alone at its address is a direct camera: there is
+      // no hub there to answer for it.
+      if (!ip) {
+        return;
+      }
+      const group = hosts.get(ip);
+      if (group) {
+        group.push(device);
+      } else {
+        hosts.set(ip, [device]);
+      }
+    });
+
+    await Promise.all(
+      [...hosts.values()]
+        .filter(
+          (group) => group.length > 1 || Number(getParam(group[0], DEVICE_PARAMS.CHANNEL)) > 0,
+        )
+        .map(async (group) => {
+          const client = this.clientOf(group[0]);
+          if (!client) {
+            return;
+          }
+          const states = await readSleepStates(client.api);
+          group.forEach((device) => {
+            const channel = Number(getParam(device, DEVICE_PARAMS.CHANNEL)) || 0;
+            const asleep = states.get(channel);
+            if (asleep !== undefined) {
+              this.batteryGuard.setSleeping(device.external_id, asleep);
+            }
+          });
+        }),
+    );
+  }
+
+  /**
    * Check one camera and publish what changed.
    * @param {object} device - The Gladys device.
    * @returns {Promise<void>} Resolves once published.
@@ -192,6 +258,12 @@ export class EventWatcher {
     const platformId = parsePlatformId(device.external_id);
     const client = this.clientOf(device);
     if (!platformId || !client) {
+      return;
+    }
+
+    // A sleeping camera is left alone: its hub already told us it has nothing
+    // new to say, and every command here would wake its radio for nothing.
+    if (this.batteryGuard?.isSleeping(device.external_id)) {
       return;
     }
 

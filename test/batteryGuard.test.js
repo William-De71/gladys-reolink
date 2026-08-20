@@ -198,3 +198,84 @@ test('an unreadable battery leaves the last decision untouched', () => {
   assert.equal(guard.policyFor(ID), CAPTURE_POLICY.NONE);
   assert.equal(guard.levelOf(ID), 30);
 });
+
+test('a sleeping camera is left out of the scheduled refresh', () => {
+  // Talking to a sleeping battery camera wakes its radio, which costs far more
+  // than the request itself. Its level is irrelevant here — a camera reporting
+  // 100% is just as expensive to wake as one reporting 45%.
+  const guard = new BatteryGuard();
+  const id = 'ext:ext-dev-reolink:camera:UID1';
+  guard.trackBatteryCamera(id);
+  guard.update(id, { level: 100 });
+
+  assert.equal(guard.allowsScheduled(id), true);
+  guard.setSleeping(id, true);
+  assert.equal(guard.allowsScheduled(id), false);
+});
+
+test('a sleeping camera can still be woken on demand', () => {
+  // The whole asymmetry: nobody minds waking a camera to look at it, and
+  // everybody minds a background timer doing it every 30 seconds.
+  const guard = new BatteryGuard();
+  const id = 'ext:ext-dev-reolink:camera:UID1';
+  guard.trackBatteryCamera(id);
+  guard.update(id, { level: 100 });
+  guard.setSleeping(id, true);
+
+  assert.equal(guard.allowsOnDemand(id), true);
+});
+
+test('a camera that wakes up resumes its scheduled refresh', () => {
+  const guard = new BatteryGuard();
+  const id = 'ext:ext-dev-reolink:camera:UID1';
+  guard.trackBatteryCamera(id);
+  guard.update(id, { level: 100 });
+
+  guard.setSleeping(id, true);
+  assert.equal(guard.isSleeping(id), true);
+  guard.setSleeping(id, false);
+  assert.equal(guard.isSleeping(id), false);
+  assert.equal(guard.allowsScheduled(id), true);
+});
+
+test('sleep never overrides the flat-battery stop', () => {
+  // A camera below the hard floor stays fully blocked whether it is awake or
+  // not: the cell is what needs protecting, not the radio. Checking sleep first
+  // would let an on-demand capture through on a camera too flat to take one.
+  const guard = new BatteryGuard();
+  const id = 'ext:ext-dev-reolink:camera:UID1';
+  guard.trackBatteryCamera(id);
+  guard.update(id, { level: 10 });
+
+  assert.equal(guard.allowsOnDemand(id), false);
+  guard.setSleeping(id, true);
+  assert.equal(guard.allowsOnDemand(id), false);
+  assert.equal(guard.policyFor(id), CAPTURE_POLICY.NONE);
+});
+
+test('a camera asleep on its charger is still not woken on a timer', () => {
+  // Charging releases a camera from the level rules, but the radio wakeup is a
+  // separate cost the charger does nothing about.
+  const guard = new BatteryGuard();
+  const id = 'ext:ext-dev-reolink:camera:UID1';
+  guard.trackBatteryCamera(id);
+  guard.update(id, { level: 90, chargeStatus: 1 });
+
+  assert.equal(guard.allowsScheduled(id), true);
+  guard.setSleeping(id, true);
+  assert.equal(guard.allowsScheduled(id), false);
+});
+
+test('a sleeping camera that never reported a level is held to on-demand', () => {
+  const guard = new BatteryGuard();
+  const id = 'ext:ext-dev-reolink:camera:UID1';
+  guard.setSleeping(id, true);
+  assert.equal(guard.policyFor(id), CAPTURE_POLICY.ON_DEMAND);
+});
+
+test('a camera reached directly is never marked asleep', () => {
+  // Only a hub can answer this. A camera reached directly has nobody to speak
+  // for it, so it is awake whenever it answers at all.
+  const guard = new BatteryGuard();
+  assert.equal(guard.isSleeping('ext:ext-dev-reolink:camera:UID1'), false);
+});

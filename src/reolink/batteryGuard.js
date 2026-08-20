@@ -41,6 +41,14 @@
 //     returned FULL and captured freely, which is exactly backwards: the models
 //     that need protecting are the ones that go quiet. A camera declared as a
 //     battery model is now held to on-demand until it proves its level.
+//
+// Behind a Home Hub there is a second, better signal than the level: the hub
+// reports whether each battery camera is ASLEEP, and answers on its behalf while
+// it is. Talking to a sleeping camera wakes its radio, which costs far more than
+// the request itself — so a sleeping camera is excluded from the SCHEDULED
+// refresh whatever its level, while an explicit request still goes through. That
+// asymmetry is the whole point: nobody minds waking a camera to look at it, and
+// everybody minds a background timer doing it every 30 seconds.
 // -----------------------------------------------------------------------------
 
 import { logger } from '@gladysassistant/integration-sdk';
@@ -101,6 +109,13 @@ export class BatteryGuard {
     this.recovering = new Set();
     /** Cameras known to run on battery, whether or not they ever answered. */
     this.batteryCameras = new Set();
+    /**
+     * Cameras a hub reports as asleep.
+     *
+     * Only ever populated for cameras behind a hub — a camera reached directly
+     * has nobody to answer for it, so it is awake whenever it answers at all.
+     */
+    this.sleeping = new Set();
   }
 
   /**
@@ -255,21 +270,35 @@ export class BatteryGuard {
    * guard.policyFor(device.external_id);
    */
   policyFor(externalId) {
+    const asleep = this.sleeping.has(externalId);
+
     const level = this.freshLevel(externalId);
     if (level === undefined) {
       // No usable reading. A wired camera is never throttled; a battery one is
       // held to on-demand, because a battery camera that stopped reporting is
       // more likely to be flat than fine — and the scheduled refresh is exactly
       // what would finish it off. A stale "charging" is not trusted either: the
-      // camera may have been taken off its charger hours ago.
-      return this.batteryCameras.has(externalId) ? CAPTURE_POLICY.ON_DEMAND : CAPTURE_POLICY.FULL;
+      // camera may have been taken off its charger hours ago. A sleeping camera
+      // is held back too, even a wired one — if a hub says it sleeps, it sleeps.
+      return this.batteryCameras.has(externalId) || asleep
+        ? CAPTURE_POLICY.ON_DEMAND
+        : CAPTURE_POLICY.FULL;
     }
-    // A charging camera is refilling faster than a capture drains it.
-    if (this.charging.has(externalId)) {
-      return CAPTURE_POLICY.FULL;
-    }
-    if (level < this.stopAll) {
+    // A camera too flat to be captured is stopped outright — unless it is on its
+    // charger, which is the one case where the cell is refilling faster than a
+    // capture drains it. That exception is deliberate and predates hub support.
+    const charging = this.charging.has(externalId);
+    if (level < this.stopAll && !charging) {
       return CAPTURE_POLICY.NONE;
+    }
+    // A sleeping camera is held to on-demand whatever its level, and this
+    // outranks `charging`: the radio wakeup is a cost the charger does nothing
+    // about. It never UPGRADES a camera the rules above stopped.
+    if (asleep) {
+      return CAPTURE_POLICY.ON_DEMAND;
+    }
+    if (charging) {
+      return CAPTURE_POLICY.FULL;
     }
     if (this.recovering.has(externalId)) {
       return CAPTURE_POLICY.ON_DEMAND;
@@ -297,6 +326,39 @@ export class BatteryGuard {
    */
   allowsOnDemand(externalId) {
     return this.policyFor(externalId) !== CAPTURE_POLICY.NONE;
+  }
+
+  /**
+   * Record whether a camera is asleep, as its hub reports it.
+   *
+   * Only a hub can answer this. A camera reached directly is never marked, so
+   * this can only ever hold back a camera something else is speaking for.
+   * @param {string} externalId - The device external id.
+   * @param {boolean} asleep - What the hub reported.
+   * @example
+   * guard.setSleeping(device.external_id, true);
+   */
+  setSleeping(externalId, asleep) {
+    const was = this.sleeping.has(externalId);
+    if (asleep) {
+      this.sleeping.add(externalId);
+    } else {
+      this.sleeping.delete(externalId);
+    }
+    if (was !== asleep) {
+      logger.debug(`Reolink ${externalId} is now ${asleep ? 'asleep' : 'awake'}`);
+    }
+  }
+
+  /**
+   * Tell whether a camera is currently reported as asleep.
+   * @param {string} externalId - The device external id.
+   * @returns {boolean} True while its hub says it sleeps.
+   * @example
+   * guard.isSleeping(device.external_id);
+   */
+  isSleeping(externalId) {
+    return this.sleeping.has(externalId);
   }
 
   /**
