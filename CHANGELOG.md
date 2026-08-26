@@ -1,3 +1,14 @@
+## [1.2.0](https://github.com/William-De71/gladys-reolink/compare/v1.1.0...v1.2.0) (2026-08-26)
+
+### Features
+
+* **reolink:** stop waking sleeping battery cameras on a timer ([335604a](https://github.com/William-De71/gladys-reolink/commit/335604ab15a52a3259b8ec3a1e4c0efc51500c70))
+* **reolink:** support the Home Hub and NVR, one device per camera ([81b00ae](https://github.com/William-De71/gladys-reolink/commit/81b00ae749dd2ecfc948cc82f1c4957de05f8870))
+
+### Bug Fixes
+
+* **reolink:** name the cameras a hub does not describe, doorbell included ([05ac029](https://github.com/William-De71/gladys-reolink/commit/05ac0297bef28298e3e4a03f039b9f525f53d04b))
+
 ## [1.1.0](https://github.com/William-De71/gladys-reolink/compare/v1.0.1...v1.1.0) (2026-08-20)
 
 ### Features
