@@ -17,6 +17,11 @@
 // and `uid` are each missing on some models — so everything here degrades to a
 // usable answer rather than trusting the shape.
 //
+// A hub that omits `typeInfo` is asked again with `GetChnTypeInfo`, one entry
+// per channel in a single batch. That matters beyond cosmetics: the model is
+// what tells a doorbell from an ordinary camera behind a hub, and without it the
+// doorbell button is never published.
+//
 // Two fields deserve their own note:
 //
 //   `online`  a hub remembers a camera that is unpaired or out of range and
@@ -31,12 +36,36 @@
 // -----------------------------------------------------------------------------
 
 import { logger } from '@gladysassistant/integration-sdk';
+import { errorCodeOf } from './api.js';
 import {
   DEFAULT_CHANNEL,
   MULTI_CHANNEL_DEVICE_TYPES,
   DOORBELL_MODEL_MARKER,
+  DOORBELL_BOARD_PREFIX,
+  CHANNEL_TYPE_COMMAND,
   MAX_CHANNELS,
 } from './constants.js';
+
+/**
+ * Tell whether a model and a board name describe a doorbell.
+ *
+ * Two independent markers, because neither is always there: `typeInfo` carries
+ * the commercial name ("Reolink Video Doorbell"), which is translated on some
+ * markets, and `boardInfo` names the hardware, which starts with `DB_` on every
+ * doorbell board. Either one is enough.
+ * @param {string|null} model - The `typeInfo` string.
+ * @param {string|null} board - The `boardInfo` string.
+ * @returns {boolean} True when this channel hosts a doorbell.
+ * @example
+ * isDoorbellModel('Reolink Video Doorbell', null); // true
+ * isDoorbellModel(null, 'DB_560MIXDB32M35DBB14MP'); // true
+ */
+export function isDoorbellModel(model, board) {
+  if (typeof model === 'string' && model.includes(DOORBELL_MODEL_MARKER)) {
+    return true;
+  }
+  return typeof board === 'string' && board.startsWith(DOORBELL_BOARD_PREFIX);
+}
 
 /**
  * Tell whether a `GetDevInfo` block describes a device hosting several cameras.
@@ -107,6 +136,8 @@ export function parseChannelEntry(entry) {
   const name = rawName.length > 0 && !/^\d+$/.test(rawName) ? rawName : null;
 
   const model = typeof entry.typeInfo === 'string' && entry.typeInfo.trim() ? entry.typeInfo : null;
+  const board =
+    typeof entry.boardInfo === 'string' && entry.boardInfo.trim() ? entry.boardInfo.trim() : null;
   const uid = typeof entry.uid === 'string' && entry.uid.trim() ? entry.uid.trim() : null;
 
   return {
@@ -121,7 +152,7 @@ export function parseChannelEntry(entry) {
     // `null` means "unknown", which is NOT the same as "awake" — the battery
     // guard treats the two differently.
     sleeping: entry.sleep === undefined ? null : Number(entry.sleep) === 1,
-    isDoorbell: model ? model.includes(DOORBELL_MODEL_MARKER) : false,
+    isDoorbell: isDoorbellModel(model, board),
   };
 }
 
@@ -147,6 +178,76 @@ export function parseChannelStatus(value) {
         (entry, index, all) => all.findIndex((other) => other.channel === entry.channel) === index,
       )
   );
+}
+
+/**
+ * Read one `GetChnTypeInfo` answer into a model and a board name.
+ *
+ * Firmwares disagree on the shape: some nest the fields under `ChnTypeInfo`,
+ * others put them straight in `value`. Both are accepted rather than betting on
+ * one.
+ * @param {object|null} value - The `value` of one answer.
+ * @returns {{ model: string|null, board: string|null }} What the channel announced.
+ * @example
+ * parseChannelType({ typeInfo: 'E1 Zoom', boardInfo: 'IPC_566SD664M5MP' });
+ */
+export function parseChannelType(value) {
+  const block =
+    value?.ChnTypeInfo && typeof value.ChnTypeInfo === 'object' ? value.ChnTypeInfo : value;
+  const readString = (field) =>
+    typeof block?.[field] === 'string' && block[field].trim() ? block[field].trim() : null;
+  return {
+    // `type` is what Home Assistant reads; this firmware answers `typeInfo`.
+    model: readString('typeInfo') || readString('type'),
+    board: readString('boardInfo'),
+  };
+}
+
+/**
+ * Fill in the model of the channels that did not announce one.
+ *
+ * `GetChannelstatus` carries `typeInfo` on some firmwares only, and without it a
+ * doorbell is indistinguishable from an ordinary camera — so its capability
+ * would never be published. One batched request covers every channel, and the
+ * hub answers for its cameras, so nothing on battery is woken.
+ * @param {object} api - The API client.
+ * @param {object[]} channels - The channels, mutated in place.
+ * @returns {Promise<void>} Resolves once the models are filled in.
+ * @example
+ * await fillChannelModels(api, channels);
+ */
+export async function fillChannelModels(api, channels) {
+  const missing = channels.filter((entry) => entry.model === null);
+  if (missing.length === 0) {
+    return;
+  }
+
+  let answers;
+  try {
+    answers = await api.sendBatch(
+      missing.map((entry) => ({
+        cmd: CHANNEL_TYPE_COMMAND,
+        action: 0,
+        param: { channel: entry.channel },
+      })),
+    );
+  } catch (e) {
+    // Not fatal: the cameras still work, they just stay unlabelled.
+    logger.debug(`Reading the channel types of ${api.ip} failed: ${e.message}`);
+    return;
+  }
+
+  missing.forEach((entry, index) => {
+    const result = answers?.[index];
+    if (!result || errorCodeOf(result) !== 0) {
+      return;
+    }
+    const { model, board } = parseChannelType(result.value);
+    entry.model = model;
+    if (isDoorbellModel(model, board)) {
+      entry.isDoorbell = true;
+    }
+  });
 }
 
 /**
@@ -208,6 +309,10 @@ export async function listChannels(api, devInfo) {
   }
 
   const online = channels.filter((entry) => entry.online);
+  // Only for the channels that will actually be published: an offline camera
+  // has no model worth asking for.
+  await fillChannelModels(api, online);
+
   const offline = channels.length - online.length;
   if (offline > 0) {
     // Worth saying: a camera the user expects to see in Gladys is missing, and

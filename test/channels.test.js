@@ -7,6 +7,9 @@ import {
   parseChannelStatus,
   listChannels,
   readSleepStates,
+  isDoorbellModel,
+  parseChannelType,
+  fillChannelModels,
 } from '../src/reolink/channels.js';
 import { fakeApi } from './helpers/fakeGladys.js';
 
@@ -197,4 +200,95 @@ test('an unreadable hub reports no sleep state rather than failing the round', a
     },
   };
   assert.equal((await readSleepStates(api)).size, 0);
+});
+
+test('a doorbell is recognised from its board name when the model does not say so', () => {
+  // Two independent markers, because neither is always there. `typeInfo` is the
+  // commercial name, which Reolink translates per market; `boardInfo` names the
+  // hardware and starts with `DB_` on every doorbell board.
+  assert.equal(isDoorbellModel('Reolink Video Doorbell', null), true);
+  assert.equal(isDoorbellModel(null, 'DB_560MIXDB32M35DBB14MP'), true);
+  assert.equal(isDoorbellModel('E1 Zoom', 'IPC_566SD664M5MP'), false);
+  assert.equal(isDoorbellModel(null, null), false);
+});
+
+test('a channel type is read whether the firmware nests it or not', () => {
+  // Home Assistant reads `ChnTypeInfo.type`; the Home Hub firmware reported on
+  // the forum answers `typeInfo` straight in `value`. Both shapes are real.
+  assert.deepEqual(parseChannelType({ ChnTypeInfo: { type: 'Argus 3 Ultra' } }), {
+    model: 'Argus 3 Ultra',
+    board: null,
+  });
+  assert.deepEqual(parseChannelType({ typeInfo: 'RLC-510A', boardInfo: 'IPC_MS1NA45MP' }), {
+    model: 'RLC-510A',
+    board: 'IPC_MS1NA45MP',
+  });
+  assert.deepEqual(parseChannelType(null), { model: null, board: null });
+});
+
+test('a hub that omits the models is asked for them, which reveals the doorbell', async () => {
+  // The real answer of the Home Hub on the forum: `GetChannelstatus` carries no
+  // `typeInfo` at all, so without this second request the doorbell on channel 2
+  // would be published as an ordinary camera, with no doorbell capability.
+  const types = [
+    { typeInfo: 'RLC-510A', boardInfo: 'IPC_MS1NA45MP' },
+    { typeInfo: 'Argus 3 Ultra', boardInfo: 'BIPC_560MIX16M35C10G8MP' },
+    { typeInfo: 'Reolink Video Doorbell', boardInfo: 'DB_560MIXDB32M35DBB14MP' },
+  ];
+  const api = {
+    ip: '192.168.1.69',
+    batches: [],
+    async sendBatch(commands) {
+      this.batches.push(commands);
+      return commands.map((command) => ({
+        cmd: command.cmd,
+        code: 0,
+        value: types[command.param.channel],
+      }));
+    },
+  };
+
+  const channels = [
+    { channel: 0, model: null, isDoorbell: false },
+    { channel: 1, model: null, isDoorbell: false },
+    { channel: 2, model: null, isDoorbell: false },
+  ];
+  await fillChannelModels(api, channels);
+
+  assert.equal(channels[0].model, 'RLC-510A');
+  assert.equal(channels[0].isDoorbell, false);
+  assert.equal(channels[2].model, 'Reolink Video Doorbell');
+  assert.equal(channels[2].isDoorbell, true);
+  // One batched request for every channel, not one request per camera.
+  assert.equal(api.batches.length, 1);
+  assert.equal(api.batches[0].length, 3);
+});
+
+test('channels that already announced a model are not asked again', async () => {
+  const api = {
+    ip: '192.168.1.69',
+    batches: [],
+    async sendBatch(commands) {
+      this.batches.push(commands);
+      return commands.map((command) => ({ cmd: command.cmd, code: 0, value: {} }));
+    },
+  };
+
+  await fillChannelModels(api, [{ channel: 0, model: 'RLC-810A', isDoorbell: false }]);
+  // Nothing was missing, so the hub is left alone entirely.
+  assert.equal(api.batches.length, 0);
+});
+
+test('a hub that cannot answer the type command leaves the cameras usable', async () => {
+  const api = {
+    ip: '192.168.1.69',
+    async sendBatch() {
+      throw new Error('REOLINK_TIMEOUT');
+    },
+  };
+
+  const channels = [{ channel: 0, model: null, isDoorbell: false }];
+  // Unlabelled is a nuisance; a scan that throws would lose the camera outright.
+  await fillChannelModels(api, channels);
+  assert.equal(channels[0].model, null);
 });

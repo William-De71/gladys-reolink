@@ -126,6 +126,29 @@ export const MULTI_CHANNEL_DEVICE_TYPES = ['NVR', 'WIFI_NVR', 'HOMEHUB'];
 export const DOORBELL_MODEL_MARKER = 'Doorbell';
 
 /**
+ * The `boardInfo` prefix that identifies a doorbell behind a hub.
+ *
+ * A second, independent marker: the commercial name in `typeInfo` is what
+ * Reolink prints on the box and translates per market, while `boardInfo` names
+ * the hardware and starts with `DB_` on every doorbell board — as in
+ * `DB_560MIXDB32M35DBB14MP`. Checking both means a doorbell sold under a name
+ * that never says "Doorbell" is still recognised.
+ */
+export const DOORBELL_BOARD_PREFIX = 'DB_';
+
+/**
+ * Per-channel command giving the model of the camera on one channel.
+ *
+ * `GetChannelstatus` carries a `typeInfo` on some firmwares only; this is the
+ * command that answers for the rest. The hub replies on behalf of its cameras,
+ * so asking costs nothing to a sleeping battery model.
+ *
+ * Firmwares disagree on the shape of the answer: some nest it under
+ * `ChnTypeInfo`, others return the fields directly in `value`. Both are read.
+ */
+export const CHANNEL_TYPE_COMMAND = 'GetChnTypeInfo';
+
+/**
  * Largest number of channels an answer may declare.
  *
  * A firmware that reports a nonsense `count` (or a `channelNum` left at a
