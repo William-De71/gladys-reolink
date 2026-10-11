@@ -84,6 +84,7 @@ export function fakeDevice({
   capabilities = '',
   features = [],
   channel = 0,
+  onvifPort = 0,
 } = {}) {
   return {
     name,
@@ -97,6 +98,7 @@ export function fakeDevice({
       { name: 'REOLINK_MODEL', value: 'RLC-810A' },
       { name: 'REOLINK_CAPABILITIES', value: capabilities },
       { name: 'REOLINK_CHANNEL', value: String(channel) },
+      { name: 'REOLINK_ONVIF_PORT', value: String(onvifPort) },
     ],
   };
 }

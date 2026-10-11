@@ -174,3 +174,12 @@ test('the resume level is configurable', () => {
   assert.equal(normalizeConfig().battery_resume, DEFAULT_CONFIG.battery_resume);
   assert.equal(normalizeConfig({ battery_resume: '90' }).battery_resume, 90);
 });
+
+test('the ONVIF option accepts every shape a checkbox may be stored in', () => {
+  assert.equal(normalizeConfig({}).onvif_events, true, 'on by default');
+  assert.equal(normalizeConfig({ onvif_events: false }).onvif_events, false);
+  assert.equal(normalizeConfig({ onvif_events: 'false' }).onvif_events, false);
+  assert.equal(normalizeConfig({ onvif_events: '0' }).onvif_events, false);
+  assert.equal(normalizeConfig({ onvif_events: 'true' }).onvif_events, true);
+  assert.equal(normalizeConfig({ onvif_events: 'nonsense' }).onvif_events, true);
+});

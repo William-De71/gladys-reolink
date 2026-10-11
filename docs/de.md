@@ -1,0 +1,144 @@
+# Reolink in Gladys
+
+Diese Integration bringt Ihre **Reolink**-Kameras in Gladys: das Bild im Dashboard, Live-Video, sofortige Erkennungen als Szenen-Auslöser und je nach Modell die Steuerung von Scheinwerfer, Sirene, Infrarot-LEDs und motorisierten Köpfen.
+
+Alles läuft **in Ihrem lokalen Netzwerk**. Ein Reolink-Konto ist nicht nötig, und kein Bild geht jemals über eine Cloud.
+
+## Was Sie brauchen
+
+- Eine oder mehrere Reolink-Kameras im selben Netzwerk wie Gladys — eigenständig oder mit einem **Home Hub** oder einem **NVR** gekoppelt.
+- Den Benutzernamen und das Passwort, mit denen Sie sich an diesen Kameras anmelden (die aus der Reolink-App, meist `admin`).
+
+Das ist alles. Es muss weder ein Konto angelegt noch ein API-Schlüssel beantragt werden.
+
+> **Akkukameras** (Argus, Go…) werden in der Regel über ihren Home Hub oder NVR erreicht: Allein bieten die meisten nicht die lokale API, die diese Integration nutzt.
+
+## Einrichtung
+
+1. Öffnen Sie in Gladys **Integrationen → Integration installieren** und installieren Sie Reolink.
+2. Geben Sie im Konfigurationsbildschirm den **Benutzernamen** und das **Passwort** Ihrer Kameras ein.
+3. Klicken Sie auf **Verbindung testen**: Gladys sucht Ihre Kameras und zeigt an, was jede kann, ob sie ihre Erkennungen sofort meldet und ob ihre Live-Ansicht verfügbar ist.
+4. Öffnen Sie **Entdecken** und starten Sie eine Suche: Ihre Kameras erscheinen dort und können hinzugefügt werden. Hinter einem Home Hub oder NVR wird jede Kamera zu einem eigenen Gerät.
+
+### Empfohlene Kameraeinstellungen
+
+Neuere Reolink-Firmwares werden mit einigen Netzwerkdiensten **deaktiviert** ausgeliefert. Öffnen Sie in der Reolink-App **Einstellungen → Netzwerk → Erweitert → Servereinstellungen** (die Bezeichnung variiert je nach App-Version leicht) und aktivieren Sie:
+
+- **RTSP** — für das Live-Video;
+- **ONVIF** — für sofortige Erkennungen (siehe unten).
+
+Der Verbindungstest meldet Kamera für Kamera, wenn RTSP deaktiviert ist.
+
+### Wenn eine Kamera nicht gefunden wird
+
+Gladys sucht Ihre Kameras per Netzwerk-Broadcast. Manche Router filtern ihn, und eine Kamera in einem anderen VLAN empfängt ihn nie. Geben Sie in diesem Fall ihre Adresse unter **Kameraadressen** im Bereich „Erweitert“ ein:
+
+```
+192.168.1.42, 192.168.1.43
+```
+
+Wenn eine Kamera nicht den Standardport nutzt, fügen Sie ihn hinzu: `192.168.1.42:8000`.
+
+### Wenn Ihre Kameras nicht dasselbe Passwort haben
+
+Tragen Sie die Ausnahmen unter **Konten pro Kamera** ein:
+
+```
+192.168.1.42|gladys|MeinPasswort
+```
+
+Kameras, die nicht in dieser Liste stehen, nutzen das globale Konto.
+
+## Was Sie bekommen
+
+Jede Kamera erhält **die Funktionen, die sie tatsächlich hat**. Die Integration fragt die Kamera, statt sich auf ihren Modellnamen zu verlassen: Zwei Kameras derselben Serie können sich unterscheiden.
+
+| Funktion                 | Bei welchen Kameras                                   |
+| ------------------------ | ----------------------------------------------------- |
+| Bild                     | Alle                                                  |
+| Live-Video               | Alle (RTSP aktiviert)                                 |
+| Bewegung                 | Alle                                                  |
+| Person / Fahrzeug / Tier | Modelle mit KI-Erkennung                              |
+| Türklingel               | Video-Türklingeln                                     |
+| Akku                     | Akku- und Solarmodelle                                |
+| Scheinwerfer             | Modelle mit weißem Scheinwerfer                       |
+| Sirene                   | Modelle mit Alarmlautsprecher                         |
+| Infrarot                 | Die meisten Modelle                                   |
+| Bewegen (Pfeile)         | Motorisierte Kameras (Schwenken/Neigen oder nur Zoom) |
+| Position                 | Motorisierte Kameras mit gespeicherten Positionen     |
+
+### Erkennungen
+
+Eine Kamera kann auf zwei Arten melden, was sie sieht, und die Integration wählt für jede Kamera selbst die beste:
+
+- **Sofort, über ONVIF** — direkt erreichbare kabelgebundene Kameras **senden** ihre Bewegungs-, Personen-, Fahrzeug-, Tier- und Klingelereignisse in dem Moment, in dem sie auftreten, und melden auch deren Ende. Das ist die Standardeinstellung, sofern ONVIF an der Kamera aktiviert ist.
+- **Durch regelmäßige Abfragen** — Akkukameras, Kameras hinter einem Home Hub oder NVR und Kameras mit deaktiviertem ONVIF werden regelmäßig abgefragt. Das Prüfintervall (standardmäßig 15 Sekunden) ist dann die Erkennungsverzögerung.
+
+Antwortet eine Kamera nicht mehr über ONVIF, wechselt sie von selbst zu regelmäßigen Abfragen und kehrt zu ONVIF zurück, sobald sie wieder antwortet. Mit der Option **Sofortige Erkennungen (ONVIF)** im Bereich „Erweitert“ können Sie ONVIF vollständig abschalten.
+
+Eine Erkennung löst außerdem eine Bildaufnahme aus, sodass das Widget ohne Wartezeit zeigt, was passiert ist.
+
+Die Personen-, Fahrzeug- und Tiererkennungen erscheinen als Bewegungsmelder namens „Person“, „Vehicle“ und „Animal“: Verwenden Sie sie in einem Szenen-Auslöser wie jeden anderen Bewegungsmelder, zum Beispiel „wenn am Tor eine Person erkannt wird, das Licht am Eingang einschalten“.
+
+### Türklingel
+
+Der Klingelknopf erscheint als Funktion **Türklingel**: Das Dashboard zeigt während eines Klingelns „Klingelt“, danach die Uhrzeit des letzten Klingelns, und der Szenen-Editor bietet **„Wenn die Türklingel klingelt“** an.
+
+### Motorisierte Kameras (PTZ)
+
+- **Bewegen** zeigt Pfeile im Dashboard. Jeder Druck bewegt die Kamera um einen kleinen Schritt, der von selbst stoppt — eine Szene, die eine Bewegung sendet, lässt die Kamera nie weiterdrehen. Eine Kamera mit reinem Zoomobjektiv erhält nur die Zoomtasten.
+- **Position** listet die in der Reolink-App gespeicherten Positionen nach Namen auf. Wählen Sie eine aus, um die Kamera dorthin zu fahren — im Dashboard oder in einer Szene.
+
+Die Positionsliste wird beim Entdecken der Kamera gelesen: Starten Sie nach dem Speichern einer neuen Position in der Reolink-App erneut eine Suche. Die Aktion **PTZ-Positionen auflisten** zeigt, was jede Kamera gerade gespeichert hat.
+
+## Akkuschutz
+
+Eine Bildaufnahme ist das, was eine Akku- oder Solarkamera am stärksten entlädt. Die Integration nimmt daher Tempo heraus, bevor der Akku einen kritischen Stand erreicht:
+
+- **unter 60 %**: Die automatische Aktualisierung stoppt. Das Öffnen des Widgets oder eine Erkennung nimmt weiterhin ein Bild auf;
+- **unter 40 %**: Es wird überhaupt kein Bild mehr aufgenommen;
+- **wieder normal**, sobald die Kamera wieder am Ladegerät hängt oder per Solar **80 %** erreicht.
+
+Diese 80 % liegen bewusst deutlich über der Pausenschwelle: Knapp darüber fortzusetzen, würde die Entladung sofort wieder starten. Stellen Sie nicht 100 % ein — eine Solarkamera lädt in Schüben und zeigt selten exakt voll an, sie bliebe sonst dauerhaft pausiert, ohne Ladegerät, an das man sie hängen könnte.
+
+Akkustand und Erkennungen werden in jedem Fall weiter gelesen: Das kostet fast nichts und zeigt, wann die Kamera wieder geladen ist.
+
+Eine Akkukamera, die **nicht mehr antwortet** — Tiefschlaf, abgelehnte Sitzung, Netzwerk weg — wird ebenfalls auf „nur auf Anfrage“ zurückgestuft: Ihr letzter bekannter Stand ist nicht mehr verlässlich, und eine stumme Kamera ist eher leer als voll.
+
+Hinter einem Home Hub meldet der Hub außerdem, welche Kameras **schlafen**: Eine schlafende Kamera wird von der automatischen Aktualisierung nie geweckt, egal wie voll ihr Akku ist.
+
+### Ein eigenes Aufnahmeintervall
+
+Akkukameras haben ihr **eigenes Aktualisierungsintervall**, unabhängig von den kabelgebundenen. Die Aufnahmen eines Solarmodells zu strecken, kostet die Aktualität Ihrer Netzstromkameras also nichts.
+
+| Einstellung                              | Standard       | Gilt für                   |
+| ---------------------------------------- | -------------- | -------------------------- |
+| Bildaktualisierungsintervall             | 60 s           | nur kabelgebundene Kameras |
+| Aktualisierungsintervall der Akkukameras | 900 s (15 min) | Akku- und Solarmodelle     |
+
+Das ist die wirksamste Einstellung überhaupt: Was den Akku kostet, ist das **Aufwecken der Kamera**, weit mehr als das Bild selbst. Verlängern Sie dieses Intervall im Winter oder wenn Ihr Panel wenig Sonne bekommt, und erhöhen Sie die Pausenschwelle.
+
+Alle Schwellen sind einstellbar, und kabelgebundene Kameras sind nie betroffen.
+
+## Häufige Fragen
+
+**Das Dashboard-Bild ist eingefroren.**
+Prüfen Sie das Aktualisierungsintervall im Bereich „Erweitert“. Läuft die Kamera mit Akku, ist sie vielleicht pausiert: Sehen Sie sich ihren Akkustand an.
+
+**Das Live-Video startet nicht.**
+Live läuft über den RTSP-Stream der Kamera. Führen Sie **Verbindung testen** aus: Es meldet, wenn RTSP an einer Kamera deaktiviert ist. Aktivieren Sie es in der Reolink-App (Einstellungen → Netzwerk → Erweitert → Servereinstellungen) und starten Sie dann erneut eine Suche.
+
+**Meine Erkennungen kommen verzögert an.**
+Die Kamera wird regelmäßig abgefragt, statt ihre Ereignisse zu senden. Führen Sie **Verbindung testen** aus: Eine Kamera mit dem Hinweis „Erkennungen werden regelmäßig abgefragt“ läuft mit Akku, steht hinter einem Home Hub oder NVR oder hat ONVIF deaktiviert. Im letzten Fall aktivieren Sie ONVIF in der Reolink-App und starten erneut eine Suche.
+
+**Eine Kamera wurde gefunden, aber Gladys meldet abgelehnte Zugangsdaten.**
+Das verwendete Konto muss die Kameraeinstellungen lesen dürfen. Ein eingeschränkter Benutzer funktioniert, ein „Gast“-Konto hat aber nicht immer die nötigen Rechte.
+
+**Mein Scheinwerfer schaltet sich von selbst aus.**
+Die Kamera wendet ihren eigenen Beleuchtungszeitplan an. Wenn Sie den Scheinwerfer in Gladys einschalten, erweitert die Integration diesen Zeitplan auf den ganzen Tag und stellt Ihre eigenen Einstellungen wieder her, wenn Sie ihn in Gladys ausschalten. Eine zwischenzeitliche Änderung in der Reolink-App hat Vorrang.
+
+**In der Positionsliste fehlt eine Position.**
+Die Positionen werden beim Entdecken der Kamera gelesen. Starten Sie erneut eine Suche, nachdem Sie in der Reolink-App eine neue Position gespeichert haben.
+
+**Eine Kamera meines Home Hubs erscheint nicht.**
+Der Hub listet nur die Kameras auf, die er gerade erreichen kann. Prüfen Sie, ob die Kamera Strom hat und in Reichweite des Hubs ist, und starten Sie dann erneut eine Suche.

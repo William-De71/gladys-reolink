@@ -15,7 +15,7 @@
 //     and recent firmwares answer with a per-type `support` flag.
 // -----------------------------------------------------------------------------
 
-import { CAPABILITIES, ABILITY_KEYS, DEFAULT_CHANNEL } from './constants.js';
+import { CAPABILITIES, ABILITY_KEYS, DEFAULT_CHANNEL, PTZ_TYPE_VERSIONS } from './constants.js';
 
 /**
  * Read the `ver` of one ability entry, wherever the firmware put it.
@@ -141,6 +141,19 @@ export function resolveCapabilities({ ability, aiState, devInfo, channel = DEFAU
     if (supportsCapability(ability, capability, channel)) {
       capabilities.add(capability);
     }
+  }
+
+  // The motors: `ptzType` enumerates the mechanics rather than flagging them, so
+  // its version is matched against what each kind of head can do. `ptzCtrl` is
+  // the older marker, only trusted for pan/tilt when `ptzType` is absent.
+  const ptzType = abilityVersion(ability, 'ptzType', channel);
+  if (PTZ_TYPE_VERSIONS.PAN_TILT.includes(ptzType)) {
+    capabilities.add(CAPABILITIES.PTZ_PAN_TILT);
+  } else if (ptzType === 0 && abilityVersion(ability, 'ptzCtrl', channel) > 0) {
+    capabilities.add(CAPABILITIES.PTZ_PAN_TILT);
+  }
+  if (PTZ_TYPE_VERSIONS.ZOOM.includes(ptzType)) {
+    capabilities.add(CAPABILITIES.PTZ_ZOOM);
   }
 
   for (const type of parseAiSupport(aiState)) {

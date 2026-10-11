@@ -14,7 +14,7 @@ import {
 } from '../src/devices.js';
 import { normalizeConfig } from '../src/config.js';
 import { buildRtspUrl } from '../src/reolink/rtsp.js';
-import { CAPABILITIES, DEVICE_PARAMS, AI_FEATURES_ENABLED } from '../src/reolink/constants.js';
+import { CAPABILITIES, DEVICE_PARAMS, CAMERA_MOVE } from '../src/reolink/constants.js';
 import { fakeGladys, fakeDevice } from './helpers/fakeGladys.js';
 
 const gladys = fakeGladys();
@@ -158,35 +158,86 @@ test('a feature is only created for a capability the camera announced', () => {
   assert.ok(loaded.some((feature) => feature.category === 'battery'));
   assert.ok(loaded.some((feature) => feature.category === 'light'));
   assert.ok(loaded.some((feature) => feature.category === 'siren'));
-  assert.equal(
-    loaded.some((feature) => feature.category === 'presence-sensor'),
-    AI_FEATURES_ENABLED,
-  );
+  assert.ok(loaded.some((feature) => feature.name === 'Garden - Person'));
 });
 
-test('a doorbell gets a push button, an ordinary camera does not', () => {
+test('a doorbell gets the doorbell ring feature, an ordinary camera does not', () => {
+  // The dedicated category: "Ringing" on the dashboard and "when the doorbell
+  // rings" in the scene editor, which a push button offers neither of.
   const doorbell = buildFeatures(gladys, camera({ capabilities: [CAPABILITIES.DOORBELL] }));
-  const button = doorbell.find((feature) => feature.category === 'button');
-  assert.ok(button);
-  assert.equal(button.type, 'push');
+  const ring = doorbell.find((feature) => feature.category === 'doorbell');
+  assert.ok(ring);
+  assert.equal(ring.type, 'ring');
+  assert.match(ring.external_id, /:doorbell$/, 'the external id is unchanged');
 
-  assert.ok(!buildFeatures(gladys, camera()).some((feature) => feature.category === 'button'));
+  assert.ok(!buildFeatures(gladys, camera()).some((feature) => feature.category === 'doorbell'));
 });
 
-test('the AI detections are presence sensors, not a second motion sensor', () => {
-  // Gladys already gets a motion feature from GetMdState; a second one saying
-  // the same thing differently would be confusing in the scene editor.
-  //
-  // While AI_FEATURES_ENABLED is false the presence features are held back
-  // (Gladys cannot display a presence-sensor/binary yet), so the expected count
-  // follows the flag — the motion sensor is unaffected either way.
+test('a pan/tilt camera gets the four arrows, a zoom-only one the zoom only', () => {
+  const ptz = buildFeatures(gladys, camera({ capabilities: [CAPABILITIES.PTZ_PAN_TILT] }));
+  const move = ptz.find((feature) => feature.type === 'move');
+  assert.equal(move.category, 'camera');
+  assert.deepEqual(
+    move.supported_options.map((option) => option.value),
+    [CAMERA_MOVE.PAN_LEFT, CAMERA_MOVE.PAN_RIGHT, CAMERA_MOVE.TILT_UP, CAMERA_MOVE.TILT_DOWN],
+  );
+
+  const zoom = buildFeatures(gladys, camera({ capabilities: [CAPABILITIES.PTZ_ZOOM] }));
+  assert.deepEqual(
+    zoom.find((feature) => feature.type === 'move').supported_options.map((o) => o.value),
+    [CAMERA_MOVE.ZOOM_IN, CAMERA_MOVE.ZOOM_OUT],
+  );
+
+  assert.ok(!buildFeatures(gladys, camera()).some((feature) => feature.type === 'move'));
+});
+
+test('the presets become a labeled list whose values are the preset numbers', () => {
+  // Same external id and same values as the former numeric feature: a scene
+  // that sent `3` still moves the camera to preset 3.
+  const features = buildFeatures(
+    gladys,
+    camera({
+      capabilities: [CAPABILITIES.PTZ_PRESETS],
+      presets: [
+        { id: 1, name: 'Gate' },
+        { id: 3, name: 'Driveway' },
+      ],
+    }),
+  );
+  const preset = features.find((feature) => feature.type === 'preset');
+  assert.equal(preset.category, 'camera');
+  assert.match(preset.external_id, /:ptz-preset$/);
+  assert.deepEqual(
+    preset.supported_options.map((option) => [option.value, option.label]),
+    [
+      [1, 'Gate'],
+      [3, 'Driveway'],
+    ],
+  );
+  assert.equal(preset.min, 1);
+  assert.equal(preset.max, 3);
+});
+
+test('a camera with no saved preset gets no empty list', () => {
+  const features = buildFeatures(
+    gladys,
+    camera({ capabilities: [CAPABILITIES.PTZ_PRESETS], presets: [] }),
+  );
+  assert.ok(!features.some((feature) => feature.type === 'preset'));
+});
+
+test('the AI detections are motion sensors named after what they detect', () => {
+  // Gladys cannot render a presence-sensor/binary yet (no label, no icon), so
+  // the AI detections are motion sensors whose NAME says what they detect.
   const features = buildFeatures(
     gladys,
     camera({ capabilities: [CAPABILITIES.AI_PEOPLE, CAPABILITIES.AI_VEHICLE] }),
   );
-  const presence = features.filter((feature) => feature.category === 'presence-sensor');
-  assert.equal(presence.length, AI_FEATURES_ENABLED ? 2 : 0);
-  assert.equal(features.filter((feature) => feature.category === 'motion-sensor').length, 1);
+  assert.ok(!features.some((feature) => feature.category === 'presence-sensor'));
+  assert.deepEqual(
+    features.filter((feature) => feature.category === 'motion-sensor').map((f) => f.name),
+    ['Garden - Motion', 'Garden - Person', 'Garden - Vehicle'],
+  );
 });
 
 test('the actuators the camera changes on its own declare feedback', () => {

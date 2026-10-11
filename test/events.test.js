@@ -1,9 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EventWatcher, parseMotionState, parseVisitorState } from '../src/reolink/events.js';
+import {
+  EventWatcher,
+  onvifEligible,
+  parseMotionState,
+  parseVisitorState,
+} from '../src/reolink/events.js';
 import { BatteryGuard } from '../src/reolink/batteryGuard.js';
 import { fakeGladys, fakeDevice, fakeApi, fakeSessions } from './helpers/fakeGladys.js';
-import { AI_FEATURES_ENABLED } from '../src/reolink/constants.js';
 
 /**
  * Build a watcher over one device answering a scripted state.
@@ -111,10 +115,7 @@ test('only the AI detections the camera declared are published', async () => {
   watcher.stop();
 });
 
-// Skipped while the AI features are held back: with no presence feature to
-// publish to, an AI detection is not watched at all, so there is no callback to
-// fire. The test comes back with the features (see AI_FEATURES_ENABLED).
-test('an AI detection fires the image callback', { skip: !AI_FEATURES_ENABLED }, async () => {
+test('an AI detection fires the image callback', async () => {
   const device = fakeDevice({ capabilities: 'ai_people' });
   const gladys = fakeGladys({ devices: [device] });
   const captured = [];
@@ -140,9 +141,9 @@ test('an AI detection fires the image callback', { skip: !AI_FEATURES_ENABLED },
   watcher.stop();
 });
 
-test('a doorbell press is never reset back to zero', async () => {
-  // A push button has no "released" state: Gladys treats every published 1 as
-  // one press, so a reset would count as a second one.
+test('a doorbell press is a pulse that comes back down', async () => {
+  // `doorbell/ring` is a 1 -> 0 pulse: the dashboard shows "Ringing", then the
+  // time of the last ring once the value is back to 0.
   const { watcher, gladys, device, sessions } = setup({
     answers: { GetMdState: { state: 0 }, GetAlarm: { visitor: { support: 1, alarm_state: 0 } } },
     capabilities: 'doorbell',
@@ -155,9 +156,175 @@ test('a doorbell press is never reset back to zero', async () => {
   });
   sessions.swap({ api: ringing, camera: { name: device.name, channel: 0 } });
   await watcher.checkDevice(device);
+  assert.equal(watcher.resets.size, 1, 'a ring schedules its own reset');
 
-  assert.deepEqual(statesFor(gladys, 'doorbell'), [0, 1]);
-  assert.equal(watcher.resets.size, 0, 'a push button must schedule no reset');
+  sessions.swap({
+    api: fakeApi({
+      GetMdState: { state: 0 },
+      GetAlarm: { visitor: { support: 1, alarm_state: 0 } },
+    }),
+    camera: { name: device.name, channel: 0 },
+  });
+  await watcher.checkDevice(device);
+
+  assert.deepEqual(statesFor(gladys, 'doorbell'), [0, 1, 0]);
+  watcher.stop();
+});
+
+/**
+ * Pretend the ONVIF stream of a device is (or is not) delivering events.
+ * @param {object} watcher - The watcher.
+ * @param {object} device - The device.
+ * @param {boolean} live - Whether the stream is healthy.
+ */
+function fakeOnvif(watcher, device, live) {
+  watcher.onvif.set(device.external_id, {
+    key: 'fake',
+    client: { isLive: () => live, stop() {} },
+  });
+}
+
+test('only a wired camera with an ONVIF port takes its detections from ONVIF', () => {
+  const config = { onvif_events: true };
+  assert.equal(onvifEligible(fakeDevice({ onvifPort: 8000 }), config), true);
+  assert.equal(onvifEligible(fakeDevice({ onvifPort: 0 }), config), false);
+  assert.equal(
+    onvifEligible(fakeDevice({ onvifPort: 8000, capabilities: 'battery' }), config),
+    false,
+  );
+  assert.equal(onvifEligible(fakeDevice({ onvifPort: 8000 }), { onvif_events: false }), false);
+});
+
+test('a camera whose ONVIF stream is live is not polled for its detections', async () => {
+  const { watcher, gladys, device, api } = setup({ answers: { GetMdState: { state: 1 } } });
+  fakeOnvif(watcher, device, true);
+
+  await watcher.checkDevice(device);
+
+  assert.equal(api.batches.length, 0, 'no request at all for a wired camera');
+  assert.deepEqual(statesFor(gladys, 'motion'), []);
+  watcher.onvif.clear();
+});
+
+test('a battery is still read while ONVIF delivers the detections', async () => {
+  const { watcher, gladys, device, api } = setup({
+    answers: { GetMdState: { state: 1 }, GetBatteryInfo: { Battery: { batteryPercent: 77 } } },
+    capabilities: 'battery',
+  });
+  fakeOnvif(watcher, device, true);
+
+  await watcher.checkDevice(device);
+
+  assert.deepEqual(
+    api.batches[0].map((command) => command.cmd),
+    ['GetBatteryInfo'],
+  );
+  assert.deepEqual(statesFor(gladys, 'battery'), [77]);
+  assert.deepEqual(statesFor(gladys, 'motion'), []);
+  watcher.onvif.clear();
+});
+
+test('a camera falls back to polling when its ONVIF stream is down', async () => {
+  const { watcher, gladys, device, sessions } = setup({ answers: { GetMdState: { state: 0 } } });
+  fakeOnvif(watcher, device, false);
+
+  await watcher.checkDevice(device);
+  sessions.swap({
+    api: fakeApi({ GetMdState: { state: 1 } }),
+    camera: { name: 'Garden', channel: 0 },
+  });
+  await watcher.checkDevice(device);
+
+  assert.deepEqual(statesFor(gladys, 'motion'), [0, 1]);
+  watcher.stop();
+});
+
+test('an ONVIF motion is published at once, even before any poll', async () => {
+  // Unlike a polled state, an ONVIF message IS a change: swallowing it as a
+  // "baseline" would lose the first motion after every restart.
+  const { watcher, gladys, device } = setup({ answers: {} });
+  const captured = [];
+  watcher.onDetection = async (target, kind) => captured.push(kind);
+
+  await watcher.handleOnvifEvent(device.external_id, {
+    kind: 'motion',
+    active: true,
+    initial: false,
+  });
+  await watcher.handleOnvifEvent(device.external_id, {
+    kind: 'motion',
+    active: false,
+    initial: false,
+  });
+
+  assert.deepEqual(statesFor(gladys, 'motion'), [1, 0]);
+  assert.deepEqual(captured, ['motion']);
+  watcher.stop();
+});
+
+test('the snapshot sent right after subscribing never fires a scene', async () => {
+  const { watcher, gladys, device } = setup({ answers: {} });
+  await watcher.handleOnvifEvent(device.external_id, {
+    kind: 'motion',
+    active: true,
+    initial: true,
+  });
+  assert.deepEqual(statesFor(gladys, 'motion'), []);
+  watcher.stop();
+});
+
+test('an ONVIF event for a detection the camera lacks is ignored', async () => {
+  const { watcher, gladys, device } = setup({ answers: {} });
+  await watcher.handleOnvifEvent(device.external_id, {
+    kind: 'doorbell',
+    active: true,
+    initial: false,
+  });
+  await watcher.handleOnvifEvent(device.external_id, {
+    kind: 'people',
+    active: true,
+    initial: false,
+  });
+  assert.deepEqual(gladys.published.states, []);
+  watcher.stop();
+});
+
+test('the ONVIF streams follow the devices: opened, kept, then released', () => {
+  const device = fakeDevice({ onvifPort: 8000 });
+  const gladys = fakeGladys({ devices: [device] });
+  const opened = [];
+  const watcher = new EventWatcher({
+    gladys,
+    sessions: fakeSessions(null),
+    createOnvifClient: (options) => {
+      const client = {
+        options,
+        stopped: false,
+        start() {},
+        stop() {
+          this.stopped = true;
+        },
+        isLive: () => true,
+      };
+      opened.push(client);
+      return client;
+    },
+  });
+  watcher.config = { onvif_events: true, username: 'admin', password: 'x', camera_accounts: {} };
+
+  watcher.syncOnvif([device]);
+  watcher.syncOnvif([device]);
+  assert.equal(opened.length, 1, 'kept while unchanged');
+  assert.equal(opened[0].options.port, 8000);
+
+  watcher.config = { ...watcher.config, password: 'y' };
+  watcher.syncOnvif([device]);
+  assert.equal(opened.length, 2, 'reopened on a new password');
+  assert.equal(opened[0].stopped, true, 'the old stream is released');
+
+  watcher.syncOnvif([]);
+  assert.equal(watcher.onvif.size, 0);
+  assert.equal(opened[1].stopped, true, 'released once the device is gone');
 });
 
 test('the battery level is published and fed to the guard', async () => {

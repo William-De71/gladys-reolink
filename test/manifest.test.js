@@ -174,3 +174,36 @@ test('every action the manifest declares is handled by the code', async () => {
     );
   }
 });
+
+test('every text of the manifest exists in the four languages of Gladys', () => {
+  // A field translated in English only shows up in English in a German
+  // interface; this keeps a new field from shipping half-translated.
+  const missing = [];
+  const walk = (node, path) => {
+    if (Array.isArray(node)) {
+      node.forEach((entry, index) => walk(entry, `${path}[${index}]`));
+      return;
+    }
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+    if (typeof node.en === 'string') {
+      for (const language of ['en', 'fr', 'de', 'es']) {
+        if (typeof node[language] !== 'string' || node[language].trim() === '') {
+          missing.push(`${path}.${language}`);
+        }
+      }
+      return;
+    }
+    Object.entries(node).forEach(([key, value]) => walk(value, `${path}.${key}`));
+  };
+  walk(manifest, '$');
+  assert.deepEqual(missing, []);
+});
+
+test('the user documentation exists in the four languages of Gladys', () => {
+  for (const language of ['en', 'fr', 'de', 'es']) {
+    const doc = readFileSync(new URL(`../docs/${language}.md`, import.meta.url), 'utf-8');
+    assert.ok(doc.length > 1000, `docs/${language}.md looks empty`);
+  }
+});

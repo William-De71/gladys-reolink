@@ -3,13 +3,15 @@
   "type": "device",
   "name": "Reolink",
   "description": {
-    "en": "Your Reolink cameras in Gladys: images, detections, spotlight and siren.",
-    "fr": "Vos caméras Reolink dans Gladys : images, détections, projecteur et sirène."
+    "en": "Your Reolink cameras in Gladys: images, instant detections, spotlight, siren and PTZ.",
+    "fr": "Vos caméras Reolink dans Gladys : images, détections instantanées, projecteur, sirène et PTZ.",
+    "de": "Ihre Reolink-Kameras in Gladys: Bilder, sofortige Erkennungen, Licht, Sirene und PTZ.",
+    "es": "Sus cámaras Reolink en Gladys: imágenes, detecciones instantáneas, foco, sirena y PTZ."
   },
   "version": "1.2.0",
   "docker_image": "ghcr.io/william-de71/gladys-reolink:1.2.0",
   "gladys_version": ">=4.86.0",
-  "cover_image": "https://raw.githubusercontent.com/William-De71/gladys-reolink/master/cover.jpg",
+  "cover_image": "https://raw.githubusercontent.com/William-De71/gladys-reolink/main/cover.jpg",
   "categories": ["security"],
   "transports": ["local"],
   "network_discovery": [
@@ -24,18 +26,24 @@
       "type": "section",
       "label": {
         "en": "Getting started",
-        "fr": "Pour commencer"
+        "fr": "Pour commencer",
+        "de": "Erste Schritte",
+        "es": "Primeros pasos"
       },
       "description": {
-        "en": "This integration talks to your cameras directly on your network — no Reolink account, nothing goes through the cloud. Enter the account you use to log into your cameras below, then go to the Discover screen and run a scan.\n\nEach camera gets the features it actually has: image and motion for all of them, plus battery, spotlight, siren or PTZ presets depending on the model.",
-        "fr": "Cette intégration parle à vos caméras directement sur votre réseau — sans compte Reolink, rien ne passe par le cloud. Renseignez ci-dessous le compte utilisé pour vous connecter à vos caméras, puis allez dans l'écran Découverte et lancez un scan.\n\nChaque caméra reçoit les fonctionnalités qu'elle possède réellement : image et mouvement pour toutes, plus batterie, projecteur, sirène ou positions PTZ selon le modèle."
+        "en": "This integration talks to your cameras directly on your network — no Reolink account, nothing goes through the cloud. Enter the account you use to log into your cameras below, then go to the Discover screen and run a scan.\n\nEach camera gets the features it actually has: image and motion for all of them, plus person/vehicle/animal detection, battery, spotlight, siren, doorbell or PTZ depending on the model. Wired cameras report their detections instantly over ONVIF.",
+        "fr": "Cette intégration parle à vos caméras directement sur votre réseau — sans compte Reolink, rien ne passe par le cloud. Renseignez ci-dessous le compte utilisé pour vous connecter à vos caméras, puis allez dans l'écran Découverte et lancez un scan.\n\nChaque caméra reçoit les fonctionnalités qu'elle possède réellement : image et mouvement pour toutes, plus détection de personne/véhicule/animal, batterie, projecteur, sirène, sonnette ou PTZ selon le modèle. Les caméras filaires signalent leurs détections instantanément via ONVIF.",
+        "de": "Diese Integration spricht direkt in Ihrem Netzwerk mit Ihren Kameras — ohne Reolink-Konto, nichts läuft über die Cloud. Geben Sie unten das Konto ein, mit dem Sie sich an Ihren Kameras anmelden, öffnen Sie dann den Bildschirm „Entdecken“ und starten Sie eine Suche.\n\nJede Kamera erhält die Funktionen, die sie tatsächlich hat: Bild und Bewegung für alle, dazu je nach Modell Personen-/Fahrzeug-/Tiererkennung, Akku, Scheinwerfer, Sirene, Türklingel oder PTZ. Kabelgebundene Kameras melden ihre Erkennungen sofort über ONVIF.",
+        "es": "Esta integración se comunica con sus cámaras directamente en su red — sin cuenta Reolink, nada pasa por la nube. Introduzca abajo la cuenta con la que accede a sus cámaras y luego vaya a la pantalla Descubrir y lance una búsqueda.\n\nCada cámara recibe las funciones que realmente tiene: imagen y movimiento para todas, más detección de personas/vehículos/animales, batería, foco, sirena, timbre o PTZ según el modelo. Las cámaras con cable notifican sus detecciones al instante mediante ONVIF."
       },
       "links": [
         {
           "url": "https://reolink.com/",
           "label": {
             "en": "Reolink website",
-            "fr": "Site Reolink"
+            "fr": "Site Reolink",
+            "de": "Reolink-Website",
+            "es": "Sitio web de Reolink"
           }
         }
       ]
@@ -45,15 +53,21 @@
       "type": "string",
       "label": {
         "en": "Camera username",
-        "fr": "Identifiant des caméras"
+        "fr": "Identifiant des caméras",
+        "de": "Benutzername der Kameras",
+        "es": "Usuario de las cámaras"
       },
       "description": {
         "en": "The user Gladys logs in with, the same one you use in the Reolink app. `admin` on most installations. A restricted user works too, but it must be allowed to read the camera settings.",
-        "fr": "L'utilisateur avec lequel Gladys se connecte, celui que vous utilisez dans l'application Reolink. `admin` dans la plupart des installations. Un utilisateur restreint fonctionne aussi, à condition qu'il puisse lire les paramètres de la caméra."
+        "fr": "L'utilisateur avec lequel Gladys se connecte, celui que vous utilisez dans l'application Reolink. `admin` dans la plupart des installations. Un utilisateur restreint fonctionne aussi, à condition qu'il puisse lire les paramètres de la caméra.",
+        "de": "Der Benutzer, mit dem sich Gladys anmeldet — derselbe wie in der Reolink-App. Bei den meisten Installationen `admin`. Ein eingeschränkter Benutzer funktioniert auch, sofern er die Kameraeinstellungen lesen darf.",
+        "es": "El usuario con el que Gladys inicia sesión, el mismo que usa en la aplicación Reolink. `admin` en la mayoría de las instalaciones. Un usuario restringido también funciona, siempre que pueda leer los ajustes de la cámara."
       },
       "placeholder": {
         "en": "admin",
-        "fr": "admin"
+        "fr": "admin",
+        "de": "admin",
+        "es": "admin"
       },
       "required": true,
       "default": "admin"
@@ -63,11 +77,15 @@
       "type": "secret",
       "label": {
         "en": "Camera password",
-        "fr": "Mot de passe des caméras"
+        "fr": "Mot de passe des caméras",
+        "de": "Passwort der Kameras",
+        "es": "Contraseña de las cámaras"
       },
       "description": {
         "en": "The password of that user. If your cameras do not all share the same one, fill in the per-camera accounts field further down.",
-        "fr": "Le mot de passe de cet utilisateur. Si vos caméras n'ont pas toutes le même, renseignez le champ des comptes par caméra plus bas."
+        "fr": "Le mot de passe de cet utilisateur. Si vos caméras n'ont pas toutes le même, renseignez le champ des comptes par caméra plus bas.",
+        "de": "Das Passwort dieses Benutzers. Wenn nicht alle Ihre Kameras dasselbe haben, füllen Sie weiter unten das Feld der Konten pro Kamera aus.",
+        "es": "La contraseña de ese usuario. Si no todas sus cámaras tienen la misma, rellene más abajo el campo de cuentas por cámara."
       },
       "required": true
     },
@@ -76,11 +94,15 @@
       "type": "select",
       "label": {
         "en": "Image quality",
-        "fr": "Qualité de l'image"
+        "fr": "Qualité de l'image",
+        "de": "Bildqualität",
+        "es": "Calidad de imagen"
       },
       "description": {
         "en": "HD captures the full-resolution stream and shrinks it if needed; SD asks the camera for its light stream directly — softer, but faster and easier on a battery camera.",
-        "fr": "HD capture le flux pleine résolution et le réduit si nécessaire ; SD demande directement le flux léger de la caméra — moins net, mais plus rapide et plus économe pour une caméra sur batterie."
+        "fr": "HD capture le flux pleine résolution et le réduit si nécessaire ; SD demande directement le flux léger de la caméra — moins net, mais plus rapide et plus économe pour une caméra sur batterie.",
+        "de": "HD nimmt den Stream in voller Auflösung auf und verkleinert ihn bei Bedarf; SD fragt direkt den leichten Stream der Kamera ab — weniger scharf, aber schneller und schonender für eine Akkukamera.",
+        "es": "HD captura el flujo a resolución completa y lo reduce si es necesario; SD pide directamente el flujo ligero de la cámara — menos nítido, pero más rápido y más económico para una cámara con batería."
       },
       "required": false,
       "default": "HD",
@@ -89,14 +111,18 @@
           "value": "HD",
           "label": {
             "en": "HD",
-            "fr": "HD"
+            "fr": "HD",
+            "de": "HD",
+            "es": "HD"
           }
         },
         {
           "value": "SD",
           "label": {
             "en": "SD",
-            "fr": "SD"
+            "fr": "SD",
+            "de": "SD",
+            "es": "SD"
           }
         }
       ]
@@ -106,11 +132,15 @@
       "type": "section",
       "label": {
         "en": "Advanced",
-        "fr": "Avancé"
+        "fr": "Avancé",
+        "de": "Erweitert",
+        "es": "Avanzado"
       },
       "description": {
-        "en": "Fill these fields only if a camera is not found automatically, or to adjust how often the cameras are questioned.",
-        "fr": "Ne remplissez ces champs que si une caméra n'est pas trouvée automatiquement, ou pour ajuster la fréquence d'interrogation des caméras."
+        "en": "Fill these fields only if a camera is not found automatically, or to adjust how the cameras are watched.",
+        "fr": "Ne remplissez ces champs que si une caméra n'est pas trouvée automatiquement, ou pour ajuster la façon dont les caméras sont surveillées.",
+        "de": "Füllen Sie diese Felder nur aus, wenn eine Kamera nicht automatisch gefunden wird, oder um anzupassen, wie die Kameras überwacht werden.",
+        "es": "Rellene estos campos solo si una cámara no se encuentra automáticamente, o para ajustar cómo se vigilan las cámaras."
       }
     },
     {
@@ -118,15 +148,21 @@
       "type": "string",
       "label": {
         "en": "Camera addresses",
-        "fr": "Adresses des caméras"
+        "fr": "Adresses des caméras",
+        "de": "Kameraadressen",
+        "es": "Direcciones de las cámaras"
       },
       "description": {
         "en": "Addresses separated by a comma, for example `192.168.1.42, 192.168.1.43`. Gladys looks for your cameras on the network by itself; fill this in for one the scan does not find (another VLAN, broadcast filtered by your router). Add `:port` if a camera does not use the standard port, e.g. `192.168.1.42:8000`.",
-        "fr": "Adresses séparées par une virgule, par exemple `192.168.1.42, 192.168.1.43`. Gladys cherche vos caméras sur le réseau tout seul ; remplissez ce champ pour une caméra que le scan ne trouve pas (autre VLAN, broadcast filtré par votre routeur). Ajoutez `:port` si une caméra n'utilise pas le port standard, par exemple `192.168.1.42:8000`."
+        "fr": "Adresses séparées par une virgule, par exemple `192.168.1.42, 192.168.1.43`. Gladys cherche vos caméras sur le réseau tout seul ; remplissez ce champ pour une caméra que le scan ne trouve pas (autre VLAN, broadcast filtré par votre routeur). Ajoutez `:port` si une caméra n'utilise pas le port standard, par exemple `192.168.1.42:8000`.",
+        "de": "Durch Kommas getrennte Adressen, zum Beispiel `192.168.1.42, 192.168.1.43`. Gladys sucht Ihre Kameras selbstständig im Netzwerk; tragen Sie hier eine Kamera ein, die die Suche nicht findet (anderes VLAN, vom Router gefilterter Broadcast). Fügen Sie `:port` hinzu, wenn eine Kamera nicht den Standardport nutzt, z. B. `192.168.1.42:8000`.",
+        "es": "Direcciones separadas por comas, por ejemplo `192.168.1.42, 192.168.1.43`. Gladys busca sus cámaras en la red por sí mismo; rellene este campo para una cámara que la búsqueda no encuentra (otra VLAN, broadcast filtrado por el router). Añada `:puerto` si una cámara no usa el puerto estándar, por ejemplo `192.168.1.42:8000`."
       },
       "placeholder": {
         "en": "192.168.1.42, 192.168.1.43",
-        "fr": "192.168.1.42, 192.168.1.43"
+        "fr": "192.168.1.42, 192.168.1.43",
+        "de": "192.168.1.42, 192.168.1.43",
+        "es": "192.168.1.42, 192.168.1.43"
       },
       "required": false
     },
@@ -135,15 +171,21 @@
       "type": "secret",
       "label": {
         "en": "Accounts per camera",
-        "fr": "Comptes par caméra"
+        "fr": "Comptes par caméra",
+        "de": "Konten pro Kamera",
+        "es": "Cuentas por cámara"
       },
       "description": {
         "en": "Only needed when a camera has different credentials from the ones above. Cameras separated by a comma, each as `address|username|password` — for example `192.168.1.42|gladys|MyPassword`.",
-        "fr": "Utile uniquement lorsqu'une caméra a des identifiants différents de ceux ci-dessus. Caméras séparées par une virgule, chacune sous la forme `adresse|identifiant|motdepasse` — par exemple `192.168.1.42|gladys|MonMotDePasse`."
+        "fr": "Utile uniquement lorsqu'une caméra a des identifiants différents de ceux ci-dessus. Caméras séparées par une virgule, chacune sous la forme `adresse|identifiant|motdepasse` — par exemple `192.168.1.42|gladys|MonMotDePasse`.",
+        "de": "Nur nötig, wenn eine Kamera andere Zugangsdaten als die obigen hat. Kameras durch Kommas getrennt, jeweils als `adresse|benutzer|passwort` — zum Beispiel `192.168.1.42|gladys|MeinPasswort`.",
+        "es": "Solo es necesario cuando una cámara tiene credenciales distintas de las anteriores. Cámaras separadas por comas, cada una como `dirección|usuario|contraseña` — por ejemplo `192.168.1.42|gladys|MiContraseña`."
       },
       "placeholder": {
         "en": "192.168.1.42|gladys|MyPassword",
-        "fr": "192.168.1.42|gladys|MonMotDePasse"
+        "fr": "192.168.1.42|gladys|MonMotDePasse",
+        "de": "192.168.1.42|gladys|MeinPasswort",
+        "es": "192.168.1.42|gladys|MiContraseña"
       },
       "required": false
     },
@@ -152,11 +194,15 @@
       "type": "number",
       "label": {
         "en": "Detection check interval (s)",
-        "fr": "Intervalle de vérification des détections (s)"
+        "fr": "Intervalle de vérification des détections (s)",
+        "de": "Prüfintervall der Erkennungen (s)",
+        "es": "Intervalo de comprobación de detecciones (s)"
       },
       "description": {
-        "en": "How often the integration asks your cameras whether something is being detected. Cameras report their current state rather than a history, so this interval IS the detection delay: a shorter one reacts faster but questions your cameras more often.",
-        "fr": "Fréquence à laquelle l'intégration demande à vos caméras si quelque chose est détecté. Les caméras rapportent leur état courant et non un historique : cet intervalle EST donc le délai de détection — plus court, il réagit plus vite mais sollicite davantage vos caméras."
+        "en": "How often the integration asks the cameras that do not push their detections (battery models, cameras behind a Home Hub or an NVR, or ONVIF turned off) whether something is being detected. Those cameras report their current state rather than a history, so this interval IS their detection delay: a shorter one reacts faster but questions them more often.",
+        "fr": "Fréquence à laquelle l'intégration demande aux caméras qui ne poussent pas leurs détections (modèles sur batterie, caméras derrière un Home Hub ou un NVR, ou ONVIF désactivé) si quelque chose est détecté. Ces caméras rapportent leur état courant et non un historique : cet intervalle EST donc leur délai de détection — plus court, il réagit plus vite mais les sollicite davantage.",
+        "de": "Wie oft die Integration die Kameras, die ihre Erkennungen nicht selbst senden (Akkumodelle, Kameras hinter einem Home Hub oder NVR, oder bei deaktiviertem ONVIF), fragt, ob etwas erkannt wird. Diese Kameras melden ihren aktuellen Zustand, keinen Verlauf: Dieses Intervall IST also ihre Erkennungsverzögerung — kürzer reagiert schneller, fragt die Kameras aber öfter ab.",
+        "es": "Frecuencia con la que la integración pregunta a las cámaras que no envían sus detecciones (modelos con batería, cámaras detrás de un Home Hub o un NVR, u ONVIF desactivado) si se está detectando algo. Esas cámaras informan de su estado actual y no de un historial: este intervalo ES su retraso de detección — más corto reacciona antes pero las consulta más a menudo."
       },
       "required": false,
       "default": 15,
@@ -164,15 +210,37 @@
       "max": 300
     },
     {
+      "key": "onvif_events",
+      "type": "boolean",
+      "label": {
+        "en": "Instant detections (ONVIF)",
+        "fr": "Détections instantanées (ONVIF)",
+        "de": "Sofortige Erkennungen (ONVIF)",
+        "es": "Detecciones instantáneas (ONVIF)"
+      },
+      "description": {
+        "en": "Wired cameras reached directly push their motion, person/vehicle/animal and doorbell events the moment they happen, instead of being asked every few seconds. ONVIF must be enabled on the camera (Reolink app → Settings → Network → Advanced → Server settings). A camera that does not answer over ONVIF is polled automatically.",
+        "fr": "Les caméras filaires jointes directement envoient leurs événements de mouvement, de personne/véhicule/animal et de sonnette à l'instant où ils se produisent, au lieu d'être interrogées toutes les quelques secondes. ONVIF doit être activé sur la caméra (application Reolink → Paramètres → Réseau → Avancé → Paramètres du serveur). Une caméra qui ne répond pas en ONVIF est interrogée automatiquement.",
+        "de": "Direkt erreichbare kabelgebundene Kameras senden ihre Bewegungs-, Personen-/Fahrzeug-/Tier- und Klingelereignisse in dem Moment, in dem sie auftreten, statt alle paar Sekunden abgefragt zu werden. ONVIF muss an der Kamera aktiviert sein (Reolink-App → Einstellungen → Netzwerk → Erweitert → Servereinstellungen). Eine Kamera, die nicht über ONVIF antwortet, wird automatisch abgefragt.",
+        "es": "Las cámaras con cable a las que se accede directamente envían sus eventos de movimiento, persona/vehículo/animal y timbre en el momento en que se producen, en lugar de ser consultadas cada pocos segundos. ONVIF debe estar activado en la cámara (aplicación Reolink → Ajustes → Red → Avanzado → Ajustes del servidor). Una cámara que no responde por ONVIF se consulta automáticamente."
+      },
+      "required": false,
+      "default": true
+    },
+    {
       "key": "capture_timeout",
       "type": "number",
       "label": {
         "en": "Capture timeout (s)",
-        "fr": "Délai de capture (s)"
+        "fr": "Délai de capture (s)",
+        "de": "Aufnahme-Zeitlimit (s)",
+        "es": "Tiempo límite de captura (s)"
       },
       "description": {
         "en": "How long a camera is given to answer. Battery models waking from sleep need more time than a wired one. Above 14s the dashboard live view may time out first, but the scheduled refresh still succeeds.",
-        "fr": "Temps accordé à une caméra pour répondre. Les modèles sur batterie sortant de veille ont besoin de plus de temps qu'une caméra filaire. Au-delà de 14 s, la vue live du tableau de bord peut expirer avant, mais le rafraîchissement automatique aboutit quand même."
+        "fr": "Temps accordé à une caméra pour répondre. Les modèles sur batterie sortant de veille ont besoin de plus de temps qu'une caméra filaire. Au-delà de 14 s, la vue live du tableau de bord peut expirer avant, mais le rafraîchissement automatique aboutit quand même.",
+        "de": "Wie lange eine Kamera Zeit zum Antworten hat. Akkumodelle, die aus dem Ruhezustand erwachen, brauchen länger als eine kabelgebundene Kamera. Über 14 s kann die Live-Ansicht im Dashboard zuerst abbrechen, die geplante Aktualisierung gelingt aber trotzdem.",
+        "es": "Tiempo concedido a una cámara para responder. Los modelos con batería que salen del reposo necesitan más tiempo que una cámara con cable. Por encima de 14 s, la vista en directo del panel puede expirar antes, pero la actualización programada se completa igualmente."
       },
       "required": false,
       "default": 12,
@@ -184,11 +252,15 @@
       "type": "number",
       "label": {
         "en": "Image refresh interval (s)",
-        "fr": "Intervalle de rafraîchissement des images (s)"
+        "fr": "Intervalle de rafraîchissement des images (s)",
+        "de": "Bildaktualisierungsintervall (s)",
+        "es": "Intervalo de actualización de imágenes (s)"
       },
       "description": {
         "en": "How often a new image is captured for the dashboard, on MAINS-POWERED cameras only. Battery and solar cameras have their own setting below, so keeping your wired images fresh costs nothing to the others.",
-        "fr": "Fréquence à laquelle une nouvelle image est capturée pour le tableau de bord, pour les caméras SUR SECTEUR uniquement. Les caméras sur batterie ou solaires ont leur propre réglage ci-dessous : garder vos images filaires fraîches ne coûte donc rien aux autres."
+        "fr": "Fréquence à laquelle une nouvelle image est capturée pour le tableau de bord, pour les caméras SUR SECTEUR uniquement. Les caméras sur batterie ou solaires ont leur propre réglage ci-dessous : garder vos images filaires fraîches ne coûte donc rien aux autres.",
+        "de": "Wie oft ein neues Bild für das Dashboard aufgenommen wird, NUR bei Kameras MIT NETZSTROM. Akku- und Solarkameras haben unten eine eigene Einstellung: Ihre kabelgebundenen Bilder aktuell zu halten, kostet die anderen also nichts.",
+        "es": "Frecuencia con la que se captura una nueva imagen para el panel, SOLO en cámaras CONECTADAS A LA RED ELÉCTRICA. Las cámaras con batería o solares tienen su propio ajuste más abajo: mantener frescas las imágenes de las cámaras con cable no cuesta nada a las demás."
       },
       "required": false,
       "default": 60,
@@ -200,11 +272,15 @@
       "type": "section",
       "label": {
         "en": "Battery protection",
-        "fr": "Protection de la batterie"
+        "fr": "Protection de la batterie",
+        "de": "Akkuschutz",
+        "es": "Protección de la batería"
       },
       "description": {
         "en": "Capturing images is what drains a battery or solar camera. These settings apply ONLY to battery and solar models — wired cameras keep their own interval and are never throttled. Once a camera goes below the pause limit, capturing resumes as soon as it is back on its charger, or when it reaches the recharge level: a partial recharge would restart the drain, and repeated shallow cycles wear the battery faster.",
-        "fr": "La capture d'images est ce qui vide une caméra sur batterie ou solaire. Ces réglages s'appliquent UNIQUEMENT aux modèles sur batterie ou solaires — les caméras filaires gardent leur propre intervalle et ne sont jamais ralenties. Une fois passée sous la limite de pause, la capture reprend dès que la caméra est remise en charge, ou lorsqu'elle atteint le niveau de recharge : une recharge partielle relancerait la décharge, et les cycles courts répétés usent la batterie plus vite."
+        "fr": "La capture d'images est ce qui vide une caméra sur batterie ou solaire. Ces réglages s'appliquent UNIQUEMENT aux modèles sur batterie ou solaires — les caméras filaires gardent leur propre intervalle et ne sont jamais ralenties. Une fois passée sous la limite de pause, la capture reprend dès que la caméra est remise en charge, ou lorsqu'elle atteint le niveau de recharge : une recharge partielle relancerait la décharge, et les cycles courts répétés usent la batterie plus vite.",
+        "de": "Bildaufnahmen sind es, die eine Akku- oder Solarkamera entleeren. Diese Einstellungen gelten NUR für Akku- und Solarmodelle — kabelgebundene Kameras behalten ihr eigenes Intervall und werden nie gedrosselt. Fällt eine Kamera unter die Pausengrenze, wird die Aufnahme fortgesetzt, sobald sie wieder am Ladegerät hängt oder den Wiederaufnahme-Pegel erreicht: Ein teilweises Aufladen würde die Entladung neu starten, und wiederholte flache Zyklen nutzen den Akku schneller ab.",
+        "es": "Capturar imágenes es lo que agota una cámara con batería o solar. Estos ajustes se aplican SOLO a los modelos con batería o solares — las cámaras con cable mantienen su propio intervalo y nunca se ralentizan. Cuando una cámara baja del límite de pausa, la captura se reanuda en cuanto vuelve a estar en su cargador, o cuando alcanza el nivel de reanudación: una recarga parcial reiniciaría la descarga, y los ciclos cortos repetidos desgastan la batería más rápido."
       }
     },
     {
@@ -212,11 +288,15 @@
       "type": "number",
       "label": {
         "en": "Battery camera refresh interval (s)",
-        "fr": "Intervalle de rafraîchissement des caméras sur batterie (s)"
+        "fr": "Intervalle de rafraîchissement des caméras sur batterie (s)",
+        "de": "Aktualisierungsintervall der Akkukameras (s)",
+        "es": "Intervalo de actualización de cámaras con batería (s)"
       },
       "description": {
         "en": "How often a battery or solar camera is captured, independently of your wired cameras. Waking a camera up is what costs the battery, so this is the single most effective setting: 900s (15 min) lets a solar panel refill between two captures. Lower it only if your cameras recharge faster than they discharge.",
-        "fr": "Fréquence à laquelle une caméra sur batterie ou solaire est capturée, indépendamment de vos caméras filaires. C'est le réveil de la caméra qui coûte de la batterie : ce réglage est donc le plus efficace de tous. 900 s (15 min) laisse à un panneau solaire le temps de recharger entre deux captures. Ne le baissez que si vos caméras se rechargent plus vite qu'elles ne se déchargent."
+        "fr": "Fréquence à laquelle une caméra sur batterie ou solaire est capturée, indépendamment de vos caméras filaires. C'est le réveil de la caméra qui coûte de la batterie : ce réglage est donc le plus efficace de tous. 900 s (15 min) laisse à un panneau solaire le temps de recharger entre deux captures. Ne le baissez que si vos caméras se rechargent plus vite qu'elles ne se déchargent.",
+        "de": "Wie oft eine Akku- oder Solarkamera aufgenommen wird, unabhängig von Ihren kabelgebundenen Kameras. Das Aufwecken der Kamera kostet den Akku, daher ist dies die wirksamste Einstellung: 900 s (15 min) lassen einem Solarpanel Zeit, zwischen zwei Aufnahmen nachzuladen. Senken Sie sie nur, wenn Ihre Kameras schneller laden als sie entladen.",
+        "es": "Frecuencia con la que se captura una cámara con batería o solar, independientemente de sus cámaras con cable. Despertar la cámara es lo que gasta la batería, así que este es el ajuste más eficaz: 900 s (15 min) dan tiempo a un panel solar para recargar entre dos capturas. Bájelo solo si sus cámaras se cargan más rápido de lo que se descargan."
       },
       "required": false,
       "default": 900,
@@ -228,11 +308,15 @@
       "type": "number",
       "label": {
         "en": "Pause automatic capture below (%)",
-        "fr": "Suspendre la capture automatique sous (%)"
+        "fr": "Suspendre la capture automatique sous (%)",
+        "de": "Automatische Aufnahme pausieren unter (%)",
+        "es": "Pausar la captura automática por debajo de (%)"
       },
       "description": {
         "en": "Below this level the automatic refresh stops. Opening the camera widget or a detection still captures an image.",
-        "fr": "Sous ce niveau, le rafraîchissement automatique s'arrête. Ouvrir le widget de la caméra ou une détection capture toujours une image."
+        "fr": "Sous ce niveau, le rafraîchissement automatique s'arrête. Ouvrir le widget de la caméra ou une détection capture toujours une image.",
+        "de": "Unterhalb dieses Pegels stoppt die automatische Aktualisierung. Das Öffnen des Kamera-Widgets oder eine Erkennung nimmt weiterhin ein Bild auf.",
+        "es": "Por debajo de este nivel se detiene la actualización automática. Abrir el widget de la cámara o una detección sigue capturando una imagen."
       },
       "required": false,
       "default": 60,
@@ -244,11 +328,15 @@
       "type": "number",
       "label": {
         "en": "Stop every capture below (%)",
-        "fr": "Bloquer toute capture sous (%)"
+        "fr": "Bloquer toute capture sous (%)",
+        "de": "Jede Aufnahme stoppen unter (%)",
+        "es": "Detener toda captura por debajo de (%)"
       },
       "description": {
         "en": "Below this level no image is captured at all, not even on request. The battery level and the detections keep being read: they cost almost nothing and tell when the camera has recharged.",
-        "fr": "Sous ce niveau, plus aucune image n'est capturée, même à la demande. Le niveau de batterie et les détections continuent d'être lus : cela ne coûte presque rien et permet de savoir quand la caméra est rechargée."
+        "fr": "Sous ce niveau, plus aucune image n'est capturée, même à la demande. Le niveau de batterie et les détections continuent d'être lus : cela ne coûte presque rien et permet de savoir quand la caméra est rechargée.",
+        "de": "Unterhalb dieses Pegels wird überhaupt kein Bild mehr aufgenommen, auch nicht auf Anfrage. Akkustand und Erkennungen werden weiterhin gelesen: Das kostet fast nichts und zeigt, wann die Kamera wieder geladen ist.",
+        "es": "Por debajo de este nivel no se captura ninguna imagen, ni siquiera a petición. El nivel de batería y las detecciones se siguen leyendo: no cuesta casi nada y permite saber cuándo se ha recargado la cámara."
       },
       "required": false,
       "default": 40,
@@ -260,11 +348,15 @@
       "type": "number",
       "label": {
         "en": "Resume automatic capture at (%)",
-        "fr": "Reprendre la capture automatique à (%)"
+        "fr": "Reprendre la capture automatique à (%)",
+        "de": "Automatische Aufnahme fortsetzen ab (%)",
+        "es": "Reanudar la captura automática al (%)"
       },
       "description": {
         "en": "Once a camera has been paused, it stays paused until it reaches this level — deliberately well above the pause limit, so it does not immediately fall back into the drain it was pulled out of. A camera put back on its charger resumes at once, so this only applies to solar recharging. Avoid 100%: a solar camera charges in bursts and rarely reads exactly full, which would keep it paused for good.",
-        "fr": "Une fois une caméra mise en pause, elle le reste jusqu'à ce niveau — volontairement bien au-dessus de la limite de pause, pour qu'elle ne retombe pas aussitôt dans la décharge dont elle vient de sortir. Une caméra remise sur son chargeur reprend immédiatement : ce réglage ne concerne donc que la recharge solaire. Évitez 100 % : une caméra solaire se recharge par à-coups et atteint rarement le plein exact, ce qui la laisserait en pause indéfiniment."
+        "fr": "Une fois une caméra mise en pause, elle le reste jusqu'à ce niveau — volontairement bien au-dessus de la limite de pause, pour qu'elle ne retombe pas aussitôt dans la décharge dont elle vient de sortir. Une caméra remise sur son chargeur reprend immédiatement : ce réglage ne concerne donc que la recharge solaire. Évitez 100 % : une caméra solaire se recharge par à-coups et atteint rarement le plein exact, ce qui la laisserait en pause indéfiniment.",
+        "de": "Ist eine Kamera einmal pausiert, bleibt sie es, bis sie diesen Pegel erreicht — bewusst deutlich über der Pausengrenze, damit sie nicht sofort wieder in die Entladung fällt, aus der sie gerade kommt. Eine Kamera am Ladegerät läuft sofort weiter, diese Einstellung betrifft also nur das Laden per Solarpanel. Vermeiden Sie 100 %: Eine Solarkamera lädt in Schüben und zeigt selten exakt voll an, sie bliebe sonst dauerhaft pausiert.",
+        "es": "Una vez en pausa, una cámara permanece así hasta alcanzar este nivel — deliberadamente muy por encima del límite de pausa, para que no vuelva enseguida a la descarga de la que acaba de salir. Una cámara conectada a su cargador se reanuda de inmediato, así que este ajuste solo afecta a la recarga solar. Evite el 100 %: una cámara solar se carga a tirones y rara vez marca exactamente lleno, lo que la dejaría en pausa indefinidamente."
       },
       "required": false,
       "default": 80,
@@ -277,19 +369,31 @@
       "key": "test_connection",
       "label": {
         "en": "Test the connection",
-        "fr": "Tester la connexion"
+        "fr": "Tester la connexion",
+        "de": "Verbindung testen",
+        "es": "Probar la conexión"
       },
-      "timeout_seconds": 60
+      "timeout_seconds": 60,
+      "description": {
+        "en": "Looks for your cameras and reports, for each one, what it can do, whether it reports its detections instantly (ONVIF) and whether its live view is available.",
+        "fr": "Cherche vos caméras et indique, pour chacune, ce qu'elle sait faire, si elle signale ses détections instantanément (ONVIF) et si sa vidéo en direct est disponible.",
+        "de": "Sucht Ihre Kameras und zeigt für jede an, was sie kann, ob sie ihre Erkennungen sofort meldet (ONVIF) und ob ihre Live-Ansicht verfügbar ist.",
+        "es": "Busca sus cámaras e indica, para cada una, lo que sabe hacer, si notifica sus detecciones al instante (ONVIF) y si su vídeo en directo está disponible."
+      }
     },
     {
       "key": "list_presets",
       "label": {
         "en": "List the PTZ presets",
-        "fr": "Lister les positions PTZ"
+        "fr": "Lister les positions PTZ",
+        "de": "PTZ-Positionen auflisten",
+        "es": "Listar las posiciones PTZ"
       },
       "description": {
-        "en": "Motorized cameras move to a preset by its NUMBER. This lists the presets saved on each camera, with the number to use in your scenes.",
-        "fr": "Les caméras motorisées se déplacent vers une position par son NUMÉRO. Cette action liste les positions enregistrées sur chaque caméra, avec le numéro à utiliser dans vos scènes."
+        "en": "Shows the positions currently saved on each motorized camera, with their number. The Preset feature lists them by name; run a scan again after adding one in the Reolink app.",
+        "fr": "Affiche les positions actuellement enregistrées sur chaque caméra motorisée, avec leur numéro. La fonctionnalité Position les liste par leur nom ; relancez un scan après en avoir ajouté une dans l'application Reolink.",
+        "de": "Zeigt die aktuell auf jeder motorisierten Kamera gespeicherten Positionen mit ihrer Nummer. Die Funktion „Position“ listet sie nach Namen; starten Sie nach dem Hinzufügen einer Position in der Reolink-App erneut eine Suche.",
+        "es": "Muestra las posiciones guardadas actualmente en cada cámara motorizada, con su número. La función Posición las lista por nombre; vuelva a lanzar una búsqueda tras añadir una en la aplicación Reolink."
       },
       "timeout_seconds": 60
     },
@@ -297,7 +401,9 @@
       "key": "refresh_images",
       "label": {
         "en": "Refresh the images",
-        "fr": "Rafraîchir les images"
+        "fr": "Rafraîchir les images",
+        "de": "Bilder aktualisieren",
+        "es": "Actualizar las imágenes"
       },
       "timeout_seconds": 120
     }

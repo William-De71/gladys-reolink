@@ -112,3 +112,23 @@ test('aiTypesOf maps a capability back to every name a firmware may use', () => 
   assert.deepEqual(aiTypesOf(CAPABILITIES.AI_ANIMAL).sort(), ['animal', 'dog_cat']);
   assert.deepEqual(aiTypesOf(CAPABILITIES.AI_PEOPLE), ['people']);
 });
+
+test('the PTZ head is read from ptzType, which enumerates the mechanics', () => {
+  // ptzType is NOT a boolean: 1 is a zoom lens alone, 3 a pan/tilt head with no
+  // zoom, 2 and 5 both. Reading it as a flag would put arrows on a camera that
+  // can only zoom.
+  const caps = (ver) =>
+    resolveCapabilities({ ability: { abilityChn: [{ ptzType: { ver } }] }, aiState: null });
+  assert.deepEqual(caps(1), [CAPABILITIES.PTZ_ZOOM]);
+  assert.deepEqual(caps(3), [CAPABILITIES.PTZ_PAN_TILT]);
+  assert.deepEqual(caps(5), [CAPABILITIES.PTZ_PAN_TILT, CAPABILITIES.PTZ_ZOOM]);
+  assert.deepEqual(caps(0), []);
+});
+
+test('a firmware without ptzType falls back on ptzCtrl for the arrows', () => {
+  const capabilities = resolveCapabilities({
+    ability: { abilityChn: [{ ptzCtrl: { ver: 1 } }] },
+    aiState: null,
+  });
+  assert.deepEqual(capabilities, [CAPABILITIES.PTZ_PAN_TILT]);
+});

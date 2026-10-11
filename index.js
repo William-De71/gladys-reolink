@@ -37,8 +37,17 @@ import {
   setIrLights,
   goToPreset,
   listPresets,
+  ptzStep,
 } from './src/reolink/commands.js';
 import { CAPABILITIES, FEATURE_SUFFIXES, DEVICE_PARAMS } from './src/reolink/constants.js';
+import {
+  MESSAGES,
+  CAMERA_NOTES,
+  testOk,
+  testFailed,
+  presetList,
+  refreshResult,
+} from './src/messages.js';
 
 const gladys = new GladysIntegration();
 // Guards the battery of wire-free cameras: capturing is what drains them, so it
@@ -53,6 +62,23 @@ let config = normalizeConfig();
 
 /** When each device was last captured, to honour its own refresh interval. */
 const lastCaptureAt = new Map();
+
+/**
+ * The capture in progress for each device.
+ *
+ * The refresh loop, `onPoll`, a detection and the dashboard can all ask for the
+ * same camera within a second of each other. Sharing the capture in flight
+ * means one wake-up and one Snap instead of up to four — which on a battery
+ * camera is the difference that matters.
+ */
+const capturesInFlight = new Map();
+
+/**
+ * The lighting settings a spotlight had before Gladys turned it on, by device,
+ * so turning it off restores them instead of wiping the schedule set in the
+ * Reolink app.
+ */
+const floodlightSettings = new Map();
 
 /**
  * Tell whether a device is one of the battery/solar cameras.
@@ -117,6 +143,25 @@ function isRefreshDue(device) {
  * const image = await captureDeviceImage(device);
  */
 async function captureDeviceImage(device) {
+  const inFlight = capturesInFlight.get(device.external_id);
+  if (inFlight) {
+    return inFlight;
+  }
+  const capture = captureDeviceImageNow(device).finally(() => {
+    capturesInFlight.delete(device.external_id);
+  });
+  capturesInFlight.set(device.external_id, capture);
+  return capture;
+}
+
+/**
+ * Capture a fresh image of a device, without sharing it with other callers.
+ * @param {object} device - The Gladys device.
+ * @returns {Promise<string>} The `image/jpg;base64,...` string.
+ * @example
+ * const image = await captureDeviceImageNow(device);
+ */
+async function captureDeviceImageNow(device) {
   if (!batteryGuard.allowsOnDemand(device.external_id)) {
     throw new Error(`REOLINK_BATTERY_TOO_LOW:${batteryGuard.levelOf(device.external_id)}%`);
   }
@@ -207,6 +252,13 @@ async function refreshImages(devices, { force = false } = {}) {
 
 /** Handle of the image refresh loop, so a config change can restart it. */
 let refreshTimer = null;
+/**
+ * Whether a refresh round is still running. A round captures cameras one after
+ * the other, and with a few battery cameras taking their full timeout it can
+ * outlast the interval: the next tick is then skipped rather than started on
+ * top of it.
+ */
+let refreshRunning = false;
 
 /**
  * Start (or restart) the loop that keeps the dashboard images up to date.
@@ -229,12 +281,18 @@ function startImageRefresh() {
     Math.min(config.image_refresh_interval, config.battery_image_refresh_interval),
   );
   refreshTimer = setInterval(async () => {
+    if (refreshRunning) {
+      return;
+    }
+    refreshRunning = true;
     try {
       // Re-read the devices every round: a camera may have been added or removed.
       const devices = await gladys.getDevices();
       await refreshImages(devices);
     } catch (e) {
       logger.debug(`The image refresh round failed: ${e.message}`);
+    } finally {
+      refreshRunning = false;
     }
   }, intervalSeconds * 1000);
   logger.info(
@@ -277,12 +335,7 @@ async function publishDevices() {
   config = normalizeConfig(await gladys.getConfig());
 
   if (!isConfigured(config)) {
-    await gladys
-      .setConnectionStatus(false, {
-        en: 'Fill in the username and password of your cameras to find them.',
-        fr: "Renseignez l'identifiant et le mot de passe de vos caméras pour les trouver.",
-      })
-      .catch(() => {});
+    await gladys.setConnectionStatus(false, MESSAGES.notConfigured).catch(() => {});
     return [];
   }
 
@@ -300,12 +353,7 @@ async function publishDevices() {
   if (devices.length > 0) {
     await gladys.setConnectionStatus(true).catch(() => {});
   } else {
-    await gladys
-      .setConnectionStatus(false, {
-        en: 'No camera found. Check that your cameras are powered on and reachable from Gladys, or enter their addresses manually.',
-        fr: 'Aucune caméra trouvée. Vérifiez que vos caméras sont allumées et joignables depuis Gladys, ou saisissez leurs adresses manuellement.',
-      })
-      .catch(() => {});
+    await gladys.setConnectionStatus(false, MESSAGES.noCameraFound).catch(() => {});
   }
   return devices;
 }
@@ -344,14 +392,28 @@ gladys.onSetValue(async (device, feature, value) => {
 
   try {
     switch (suffix) {
-      case FEATURE_SUFFIXES.FLOODLIGHT:
-        await setFloodlight(client.api, on, { channel: client.camera.channel });
+      case FEATURE_SUFFIXES.FLOODLIGHT: {
+        const saved = await setFloodlight(client.api, on, {
+          channel: client.camera.channel,
+          previous: floodlightSettings.get(device.external_id) ?? null,
+        });
+        if (on && saved) {
+          floodlightSettings.set(device.external_id, saved);
+        } else if (!on) {
+          floodlightSettings.delete(device.external_id);
+        }
         break;
+      }
       case FEATURE_SUFFIXES.SIREN:
         await setSiren(client.api, on, { channel: client.camera.channel });
         break;
       case FEATURE_SUFFIXES.IR_LIGHTS:
         await setIrLights(client.api, on, { channel: client.camera.channel });
+        break;
+      case FEATURE_SUFFIXES.PTZ_MOVE:
+        // A bounded step that stops itself: a lone value from a scene must
+        // never leave the camera turning.
+        await ptzStep(client.api, Number(value), { channel: client.camera.channel });
         break;
       case FEATURE_SUFFIXES.PTZ_PRESET: {
         // The value IS the preset number here, not a boolean. 0 means "no
@@ -510,51 +572,58 @@ gladys.onAction('test_connection', async () => {
   try {
     config = normalizeConfig(await gladys.getConfig());
     if (!isConfigured(config)) {
-      return {
-        en: 'Fill in the username and password of your cameras first.',
-        fr: "Renseignez d'abord l'identifiant et le mot de passe de vos caméras.",
-      };
+      return MESSAGES.testNotConfigured;
     }
 
     const devices = await buildDiscoveredDevices(gladys, config);
     if (devices.length === 0) {
-      return {
-        en: 'No camera answered. Check that your cameras are powered on and on the same network as Gladys, or enter their addresses under "Camera addresses".',
-        fr: "Aucune caméra n'a répondu. Vérifiez que vos caméras sont allumées et sur le même réseau que Gladys, ou saisissez leurs adresses dans « Adresses des caméras ».",
-      };
+      return MESSAGES.testNoAnswer;
     }
 
-    // Report what each camera can do: it is what decides the features created,
-    // and a missing spotlight switch is otherwise a mystery.
-    const summary = devices
-      .map((device) => {
-        const capabilities = getParam(device, DEVICE_PARAMS.CAPABILITIES);
-        return capabilities ? `${device.name} (${capabilities})` : device.name;
-      })
-      .join(', ');
-
-    return {
-      en: `Connection OK: ${devices.length} camera(s) found — ${summary}.`,
-      fr: `Connexion OK : ${devices.length} caméra(s) trouvée(s) — ${summary}.`,
-    };
+    // Report what each camera can do and how it is watched: it is what decides
+    // the features created, and a missing spotlight switch or a live view that
+    // never starts is otherwise a mystery.
+    const details = Object.fromEntries(
+      ['en', 'fr', 'de', 'es'].map((language) => [
+        language,
+        devices.map((device) => describeCamera(device, language)).join(', '),
+      ]),
+    );
+    return testOk(devices.length, details);
   } catch (e) {
     logger.error('The Reolink connection test failed', e);
     if (e instanceof ReolinkAuthError) {
-      return {
-        en: 'Connection refused: check the username and password of your cameras.',
-        fr: "Connexion refusée : vérifiez l'identifiant et le mot de passe de vos caméras.",
-      };
+      return MESSAGES.testAuthRefused;
     }
-    return {
-      en: `Connection failed: ${e.message}`,
-      fr: `Échec de la connexion : ${e.message}`,
-    };
+    return testFailed(e.message);
   }
 });
 
+/**
+ * Describe one camera for the connection test.
+ * @param {object} device - The device about to be published.
+ * @param {string} language - The language of the notes.
+ * @returns {string} The name, the capabilities and the notes.
+ * @example
+ * describeCamera(device, 'fr');
+ */
+function describeCamera(device, language) {
+  const notes = [];
+  const capabilities = getParam(device, DEVICE_PARAMS.CAPABILITIES);
+  if (capabilities) {
+    notes.push(capabilities);
+  }
+  const onvif = config.onvif_events && Number(getParam(device, DEVICE_PARAMS.ONVIF_PORT)) > 0;
+  notes.push(onvif ? CAMERA_NOTES.onvif[language] : CAMERA_NOTES.polled[language]);
+  if (getParam(device, DEVICE_PARAMS.RTSP_DISABLED) === '1') {
+    notes.push(CAMERA_NOTES.rtspDisabled[language]);
+  }
+  return `${device.name} (${notes.join('; ')})`;
+}
+
 // --- Manifest action: list the PTZ presets -----------------------------------
-// The preset feature takes a NUMBER, and the camera is the only one that knows
-// which numbers exist. Without this, the user has to guess.
+// The preset feature is a labeled list, but it is built at discovery: this
+// shows what each camera has saved NOW, after a preset was added in the app.
 gladys.onAction('list_presets', async () => {
   const devices = await gladys.getDevices();
   const ptzCameras = devices.filter((device) =>
@@ -562,35 +631,26 @@ gladys.onAction('list_presets', async () => {
   );
 
   if (ptzCameras.length === 0) {
-    return {
-      en: 'No camera with PTZ presets was found. Only motorized cameras have them.',
-      fr: 'Aucune caméra avec des positions PTZ trouvée. Seules les caméras motorisées en possèdent.',
-    };
+    return MESSAGES.noPtzCamera;
   }
 
-  const lines = [];
+  const cameras = [];
   for (const device of ptzCameras) {
     const client = sessions.for(device, config);
     if (!client) {
       continue;
     }
     try {
-      const presets = await listPresets(client.api, client.camera.channel);
-      lines.push(
-        presets.length > 0
-          ? `${device.name}: ${presets.map((preset) => `${preset.id} = ${preset.name}`).join(', ')}`
-          : `${device.name}: no preset saved yet`,
-      );
+      cameras.push({
+        name: device.name,
+        presets: await listPresets(client.api, client.camera.channel),
+      });
     } catch (e) {
       sessions.drop(device);
-      lines.push(`${device.name}: unreadable (${e.message})`);
+      cameras.push({ name: device.name, presets: null, error: e.message });
     }
   }
-
-  return {
-    en: `Saved presets — ${lines.join(' | ')}`,
-    fr: `Positions enregistrées — ${lines.join(' | ')}`,
-  };
+  return presetList(cameras);
 });
 
 // --- Manifest action: refresh every image ------------------------------------
@@ -600,27 +660,14 @@ gladys.onAction('refresh_images', async () => {
     (device.features || []).some((feature) => feature.category === 'camera'),
   );
   if (cameras.length === 0) {
-    return {
-      en: 'No camera created yet. Run a scan from the Discover screen first.',
-      fr: "Aucune caméra créée pour l'instant. Lancez d'abord un scan depuis l'écran Découverte.",
-    };
+    return MESSAGES.noCameraCreated;
   }
 
   // Forced: the user pressed the button, so the per-device interval does not
   // apply. The battery floor still does — `captureDeviceImage` enforces it, so a
   // camera below the hard limit reports a failure instead of being captured.
   const { published, failures } = await refreshImages(cameras, { force: true });
-
-  if (failures.length === 0) {
-    return {
-      en: `${published} image(s) refreshed.`,
-      fr: `${published} image(s) rafraîchie(s).`,
-    };
-  }
-  return {
-    en: `${published} image(s) refreshed. Failed: ${failures.join(', ')}.`,
-    fr: `${published} image(s) rafraîchie(s). Échec : ${failures.join(', ')}.`,
-  };
+  return refreshResult(published, failures);
 });
 
 // --- Configuration updated by the user ---------------------------------------
@@ -676,12 +723,7 @@ gladys.on('connected', async () => {
     }
   } catch (err) {
     logger.error('Post-connection initialization failed', err);
-    await gladys
-      .setConnectionStatus(false, {
-        en: 'Initialization failed, check the integration logs.',
-        fr: "L'initialisation a échoué, consultez les logs de l'intégration.",
-      })
-      .catch(() => {});
+    await gladys.setConnectionStatus(false, MESSAGES.initFailed).catch(() => {});
   }
 });
 

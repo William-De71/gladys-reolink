@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRtspUrl, codecOf, readCodecs } from '../src/reolink/rtsp.js';
+import { buildRtspUrl, codecOf, readCodecs, parseNetPorts } from '../src/reolink/rtsp.js';
 import { fakeApi } from './helpers/fakeGladys.js';
 
 const account = { username: 'admin', password: 'secret' };
@@ -53,4 +53,33 @@ test('readCodecs degrades to h264 when the camera refuses GetEnc', async () => {
   // still get a URL rather than none at all.
   const api = fakeApi({});
   assert.deepEqual(await readCodecs(api), { main: 'h264', sub: 'h264' });
+});
+
+test('the live URL uses the RTSP port the camera reports', () => {
+  const url = buildRtspUrl(
+    { ip: '192.168.1.42', rtspPort: 8554 },
+    { username: 'admin', password: 'x' },
+  );
+  assert.match(url, /@192\.168\.1\.42:8554\//);
+});
+
+test('GetNetPort is read with its enable flags, an absent flag meaning enabled', () => {
+  // Recent firmwares ship RTSP and ONVIF disabled and say so; older ones have
+  // no flag at all and both servers always on.
+  assert.deepEqual(
+    parseNetPorts({ NetPort: { rtspPort: 554, rtspEnable: 0, onvifPort: 8000, onvifEnable: 1 } }),
+    { rtspPort: 554, rtspEnabled: false, onvifPort: 8000, onvifEnabled: true },
+  );
+  assert.deepEqual(parseNetPorts({ NetPort: { rtspPort: 10554, onvifPort: 8999 } }), {
+    rtspPort: 10554,
+    rtspEnabled: true,
+    onvifPort: 8999,
+    onvifEnabled: true,
+  });
+  assert.deepEqual(parseNetPorts(null), {
+    rtspPort: 554,
+    rtspEnabled: true,
+    onvifPort: 8000,
+    onvifEnabled: true,
+  });
 });

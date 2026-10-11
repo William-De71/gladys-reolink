@@ -20,7 +20,13 @@
 //     is asked rather than assumed.
 // -----------------------------------------------------------------------------
 
-import { RTSP_PORT, RTSP_STREAMS, DEFAULT_CHANNEL } from './constants.js';
+import {
+  RTSP_PORT,
+  RTSP_STREAMS,
+  DEFAULT_CHANNEL,
+  ONVIF_PORT,
+  NET_PORT_COMMAND,
+} from './constants.js';
 
 /** What the camera serves when `GetEnc` could not be read. */
 const DEFAULT_CODEC = 'h264';
@@ -43,13 +49,61 @@ export function codecOf(enc, stream) {
 }
 
 /**
+ * Read a port out of the `NetPort` block, falling back when it is unusable.
+ * @param {unknown} value - The announced port.
+ * @param {number} fallback - The factory default.
+ * @returns {number} The port.
+ */
+function portOr(value, fallback) {
+  const port = Number(value);
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? port : fallback;
+}
+
+/**
+ * Read the RTSP and ONVIF servers out of a `GetNetPort` answer.
+ *
+ * The `*Enable` flags only exist on recent firmwares — precisely the ones that
+ * ship with RTSP and ONVIF turned off. An older firmware that does not announce
+ * them has both servers always on, so an absent flag means enabled.
+ * @param {object|null} value - The `GetNetPort` value.
+ * @returns {{ rtspPort: number, rtspEnabled: boolean, onvifPort: number, onvifEnabled: boolean }}
+ * What the camera serves.
+ * @example
+ * parseNetPorts({ NetPort: { rtspPort: 554, rtspEnable: 0, onvifPort: 8000 } });
+ */
+export function parseNetPorts(value) {
+  const net = value?.NetPort ?? {};
+  const enabled = (flag) => flag === undefined || flag === null || Number(flag) === 1;
+  return {
+    rtspPort: portOr(net.rtspPort, RTSP_PORT),
+    rtspEnabled: enabled(net.rtspEnable),
+    onvifPort: portOr(net.onvifPort, ONVIF_PORT),
+    onvifEnabled: enabled(net.onvifEnable),
+  };
+}
+
+/**
+ * Ask a camera (or a hub) which ports its RTSP and ONVIF servers use.
+ *
+ * A camera that cannot answer gets the factory defaults: a wrong guess costs a
+ * live view that does not start, a refused command costs the whole discovery.
+ * @param {object} api - The camera API client.
+ * @returns {Promise<object>} What `parseNetPorts` returns.
+ * @example
+ * const { rtspPort, onvifEnabled } = await readNetPorts(api);
+ */
+export async function readNetPorts(api) {
+  return parseNetPorts(await api.send(NET_PORT_COMMAND));
+}
+
+/**
  * Build the RTSP URL of one camera.
  *
  * The credentials are percent-encoded: a Reolink password commonly contains
  * `@`, `#` or `/`, each of which would otherwise break the URL apart — and the
  * live view would fail with an authentication error that says nothing about the
  * real cause.
- * @param {object} camera - The resolved camera (ip, channel, codecs).
+ * @param {object} camera - The resolved camera (ip, channel, codecs, rtspPort).
  * @param {object} account - The account, as `{ username, password }`.
  * @param {string} [quality] - 'HD' or 'SD'.
  * @returns {string} The RTSP URL.
@@ -64,7 +118,8 @@ export function buildRtspUrl(camera, account, quality = 'HD') {
   // 1-based and zero-padded, unlike every other channel number in this API.
   const channelPath = String(channel + 1).padStart(2, '0');
   const codec = camera.codecs?.[stream] || DEFAULT_CODEC;
-  return `rtsp://${user}:${password}@${camera.ip}:${RTSP_PORT}/${codec}Preview_${channelPath}_${stream}`;
+  const port = camera.rtspPort || RTSP_PORT;
+  return `rtsp://${user}:${password}@${camera.ip}:${port}/${codec}Preview_${channelPath}_${stream}`;
 }
 
 /**

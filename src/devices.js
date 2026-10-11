@@ -6,14 +6,15 @@
 // video doorbell all speak the same API but have very different hardware:
 //
 //   camera/image           the snapshot shown by the dashboard widget (always);
-//   motion-sensor/binary   motion detection (always);
-//   button/push            the doorbell press (doorbell models);
+//   motion-sensor/binary   motion detection (always), and the person / vehicle
+//                          / animal AI detections on the models that run them;
+//   doorbell/ring          the doorbell press (doorbell models);
 //   battery/integer        the battery level (battery models);
-//   presence-sensor/binary person / vehicle / animal AI detections (on hold,
-//                          see AI_FEATURES_ENABLED);
 //   light/binary           the spotlight;
 //   siren/binary           the siren;
-//   switch/binary          the infrared LEDs.
+//   switch/binary          the infrared LEDs;
+//   camera/move            the PTZ arrows (motorized models);
+//   camera/preset          the saved PTZ positions (motorized models).
 //
 // A device keeps everything needed to reach it in its params (address, port,
 // scheme, capabilities), so a poll or an `onGetImage` never needs a discovery
@@ -28,7 +29,8 @@ import {
 } from '@gladysassistant/integration-sdk';
 import { ReolinkApi, ReolinkAuthError } from './reolink/api.js';
 import { resolveCapabilities } from './reolink/capabilities.js';
-import { buildRtspUrl, readCodecs } from './reolink/rtsp.js';
+import { buildRtspUrl, readCodecs, readNetPorts } from './reolink/rtsp.js';
+import { listPresets } from './reolink/commands.js';
 import { discoverCameras } from './reolink/discovery.js';
 import { listChannels, isMultiChannelHost } from './reolink/channels.js';
 import { resolveAccount } from './config.js';
@@ -39,8 +41,45 @@ import {
   CAPABILITIES,
   POLL_FREQUENCY_MS,
   DEFAULT_CHANNEL,
-  AI_FEATURES_ENABLED,
+  CAMERA_MOVE,
 } from './reolink/constants.js';
+
+/**
+ * Default labels of the canonical movements. The dashboard renders arrows, so
+ * these only surface in the scene editor; English on purpose — Gladys
+ * translates its own canonical labels.
+ */
+const MOVEMENT_LABELS = {
+  [CAMERA_MOVE.PAN_LEFT]: 'Pan left',
+  [CAMERA_MOVE.PAN_RIGHT]: 'Pan right',
+  [CAMERA_MOVE.TILT_UP]: 'Tilt up',
+  [CAMERA_MOVE.TILT_DOWN]: 'Tilt down',
+  [CAMERA_MOVE.ZOOM_IN]: 'Zoom in',
+  [CAMERA_MOVE.ZOOM_OUT]: 'Zoom out',
+};
+
+/**
+ * The movements a camera can make, from its capabilities.
+ * @param {string[]} capabilities - The camera capabilities.
+ * @returns {number[]} `CAMERA_MOVE` values, STOP excluded (always supported).
+ * @example
+ * supportedMovements(['ptz_pan_tilt']); // [1, 2, 3, 4]
+ */
+export function supportedMovements(capabilities = []) {
+  const movements = [];
+  if (capabilities.includes(CAPABILITIES.PTZ_PAN_TILT)) {
+    movements.push(
+      CAMERA_MOVE.PAN_LEFT,
+      CAMERA_MOVE.PAN_RIGHT,
+      CAMERA_MOVE.TILT_UP,
+      CAMERA_MOVE.TILT_DOWN,
+    );
+  }
+  if (capabilities.includes(CAPABILITIES.PTZ_ZOOM)) {
+    movements.push(CAMERA_MOVE.ZOOM_IN, CAMERA_MOVE.ZOOM_OUT);
+  }
+  return movements;
+}
 
 /**
  * Build the external ids of one camera through the SDK. Gladys namespaces every
@@ -141,13 +180,12 @@ export function getParam(device, name) {
 /**
  * The AI detections, mapped to the feature they produce.
  *
- * They are `presence-sensor` rather than `motion-sensor`: Gladys already gets a
- * motion feature from `GetMdState`, and a second one saying the same thing in a
- * different way would be confusing in the scene editor. "A person was seen" is
- * what a user actually builds a scene on.
- *
- * Gated behind `AI_FEATURES_ENABLED` until Gladys can display a
- * `presence-sensor` + `binary` feature — see that constant.
+ * Published as `motion-sensor` / `binary`, named after what they detect. The
+ * `presence-sensor` category would read better, but Gladys only renders it for
+ * the `push` type: a `presence-sensor` + `binary` feature shows up with no
+ * label, no icon and a "seen 9 hours ago" instead of a yes/no. A motion sensor
+ * called "Person" is displayed, historised and offered as a scene trigger
+ * properly today — which is what a user builds "a person is at the gate" on.
  */
 const AI_FEATURES = [
   { capability: CAPABILITIES.AI_PEOPLE, suffix: FEATURE_SUFFIXES.AI_PEOPLE, label: 'Person' },
@@ -196,8 +234,11 @@ export function buildFeatures(gladys, camera) {
     features.push({
       name: `${camera.name} - Doorbell`,
       external_id: ids.feature(FEATURE_SUFFIXES.DOORBELL),
-      category: DEVICE_FEATURE_CATEGORIES.BUTTON,
-      type: DEVICE_FEATURE_TYPES.BUTTON.PUSH,
+      // The dedicated category (Gladys 4.84.2+): the dashboard shows "Ringing"
+      // then the time of the last ring, and the scene editor offers "when the
+      // doorbell rings". The value is a 1 -> 0 pulse, like a motion.
+      category: DEVICE_FEATURE_CATEGORIES.DOORBELL,
+      type: DEVICE_FEATURE_TYPES.DOORBELL.RING,
       read_only: true,
       keep_history: true,
       has_feedback: false,
@@ -221,22 +262,19 @@ export function buildFeatures(gladys, camera) {
     });
   }
 
-  const aiFeatures = AI_FEATURES_ENABLED ? AI_FEATURES : [];
-  aiFeatures
-    .filter((entry) => has(entry.capability))
-    .forEach((entry) => {
-      features.push({
-        name: `${camera.name} - ${entry.label}`,
-        external_id: ids.feature(entry.suffix),
-        category: DEVICE_FEATURE_CATEGORIES.PRESENCE_SENSOR,
-        type: DEVICE_FEATURE_TYPES.SENSOR.BINARY,
-        read_only: true,
-        keep_history: true,
-        has_feedback: false,
-        min: 0,
-        max: 1,
-      });
+  AI_FEATURES.filter((entry) => has(entry.capability)).forEach((entry) => {
+    features.push({
+      name: `${camera.name} - ${entry.label}`,
+      external_id: ids.feature(entry.suffix),
+      category: DEVICE_FEATURE_CATEGORIES.MOTION_SENSOR,
+      type: DEVICE_FEATURE_TYPES.SENSOR.BINARY,
+      read_only: true,
+      keep_history: true,
+      has_feedback: false,
+      min: 0,
+      max: 1,
     });
+  });
 
   if (has(CAPABILITIES.FLOODLIGHT)) {
     features.push({
@@ -284,21 +322,51 @@ export function buildFeatures(gladys, camera) {
     });
   }
 
-  if (has(CAPABILITIES.PTZ_PRESETS)) {
+  // PTZ arrows: only the movements the head actually has, so a zoom-only bullet
+  // camera shows a zoom and no arrows (the capability lives in the options).
+  const movements = supportedMovements(camera.capabilities);
+  if (movements.length > 0) {
+    features.push({
+      name: `${camera.name} - Move`,
+      external_id: ids.feature(FEATURE_SUFFIXES.PTZ_MOVE),
+      category: DEVICE_FEATURE_CATEGORIES.CAMERA,
+      type: DEVICE_FEATURE_TYPES.CAMERA.MOVE,
+      read_only: false,
+      // A movement is a command, not a measurement.
+      keep_history: false,
+      has_feedback: false,
+      min: CAMERA_MOVE.STOP,
+      max: CAMERA_MOVE.ZOOM_OUT,
+      supported_options: movements.map((value, index) => ({
+        value,
+        label: MOVEMENT_LABELS[value],
+        sort_order: index,
+      })),
+    });
+  }
+
+  // Saved positions, as a labeled list. The option VALUE is the Reolink preset
+  // number itself, exactly what the former numeric feature took: the external
+  // id is unchanged too, so a scene that sent `2` still moves to preset 2.
+  const presets = camera.presets || [];
+  if (has(CAPABILITIES.PTZ_PRESETS) && presets.length > 0) {
     features.push({
       name: `${camera.name} - Preset`,
       external_id: ids.feature(FEATURE_SUFFIXES.PTZ_PRESET),
-      category: DEVICE_FEATURE_CATEGORIES.SWITCH,
-      type: DEVICE_FEATURE_TYPES.SWITCH.DIMMER,
+      category: DEVICE_FEATURE_CATEGORIES.CAMERA,
+      type: DEVICE_FEATURE_TYPES.CAMERA.PRESET,
       read_only: false,
       keep_history: false,
       // Writing the preset number moves the camera; there is nothing to read
       // back, since the camera reports no "current preset".
       has_feedback: false,
-      min: 0,
-      // Reolink numbers its presets from 1; 64 is the largest the firmware
-      // accepts, and an unused number is simply refused by the camera.
-      max: 64,
+      min: Math.min(...presets.map((preset) => preset.id)),
+      max: Math.max(...presets.map((preset) => preset.id)),
+      supported_options: presets.map((preset, index) => ({
+        value: preset.id,
+        label: preset.name,
+        sort_order: index,
+      })),
     });
   }
 
@@ -341,6 +409,10 @@ export function buildDevice(gladys, camera) {
       // video for an external integration.
       { name: DEVICE_PARAMS.CAMERA_URL, value: camera.streamUrl || '' },
       { name: DEVICE_PARAMS.CAMERA_ROTATION, value: '0' },
+      // Where to subscribe to the camera's own events, '0' when there is no
+      // ONVIF server to subscribe to (see reolink/onvif.js).
+      { name: DEVICE_PARAMS.ONVIF_PORT, value: String(camera.onvifPort || 0) },
+      { name: DEVICE_PARAMS.RTSP_DISABLED, value: camera.rtspEnabled === false ? '1' : '0' },
     ],
   };
 }
@@ -380,6 +452,7 @@ export function channelPlatformId(entry, host) {
  * @param {object} context.devInfo - The `DevInfo` of the host.
  * @param {object} context.account - The credentials for this address.
  * @param {boolean} context.multiChannel - Whether the host fronts several cameras.
+ * @param {object} [context.netPorts] - The RTSP/ONVIF servers of the host.
  * @param {object} config - The normalized configuration.
  * @param {object} entry - The channel, from `listChannels`.
  * @returns {Promise<object|null>} The resolved camera, or null.
@@ -387,7 +460,7 @@ export function channelPlatformId(entry, host) {
  * await resolveChannel(context, config, { channel: 1 });
  */
 export async function resolveChannel(
-  { api, candidate, devInfo, account, multiChannel },
+  { api, candidate, devInfo, account, multiChannel, netPorts },
   config,
   entry,
 ) {
@@ -411,6 +484,25 @@ export async function resolveChannel(
   }
 
   const codecs = await readCodecs(api, channel);
+
+  // The presets become the options of a labeled list, so they are read now. A
+  // camera that cannot list them keeps its arrows; only the list is missing.
+  const presets = capabilities.includes(CAPABILITIES.PTZ_PRESETS)
+    ? await listPresets(api, channel).catch((e) => {
+        logger.debug(`Reading the presets of channel ${channel} failed: ${e.message}`);
+        return [];
+      })
+    : [];
+
+  const ports = netPorts || {};
+  // ONVIF events only for a wired camera reached directly: battery models have
+  // no ONVIF server, and behind a hub the events do not say reliably which
+  // camera they come from.
+  const onvifUsable =
+    !multiChannel &&
+    ports.onvifEnabled !== false &&
+    Boolean(ports.onvifPort) &&
+    !capabilities.includes(CAPABILITIES.BATTERY);
 
   const host = {
     uid: [candidate.uid, devInfo.serial].find(isUsableIdentity) || null,
@@ -440,6 +532,10 @@ export async function resolveChannel(
     mac: multiChannel ? null : host.mac,
     capabilities,
     codecs,
+    presets,
+    rtspPort: ports.rtspPort || null,
+    rtspEnabled: ports.rtspEnabled !== false,
+    onvifPort: onvifUsable ? ports.onvifPort : 0,
   };
 
   camera.platformId = multiChannel ? channelPlatformId(entry, host) : platformIdOf(camera);
@@ -448,6 +544,11 @@ export async function resolveChannel(
   logger.info(
     `"${camera.name}" (${camera.model} at ${camera.ip}${multiChannel ? `, channel ${channel}` : ''}) offers: ${capabilities.join(', ') || 'image and motion only'}`,
   );
+  if (!camera.rtspEnabled) {
+    logger.warn(
+      `"${camera.name}": the RTSP server is disabled, so the live view will not start. Enable it in the Reolink app (Settings → Network → Advanced → Server settings).`,
+    );
+  }
   return camera;
 }
 
@@ -486,7 +587,10 @@ export async function resolveCameras(candidate, config) {
 
     const multiChannel = isMultiChannelHost(devInfo);
     const channels = await listChannels(api, devInfo);
-    const context = { api, candidate, devInfo, account, multiChannel };
+    // Once per ADDRESS: the servers belong to the host, a hub serves the RTSP
+    // streams of all its cameras on one port.
+    const netPorts = await readNetPorts(api).catch(() => null);
+    const context = { api, candidate, devInfo, account, multiChannel, netPorts };
 
     // Sequential on purpose, unlike the per-address parallelism above: these
     // all share ONE session on ONE device, and firing a dozen batches at a hub

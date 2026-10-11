@@ -19,6 +19,10 @@ export const DEFAULT_CONFIG = {
   username: 'admin',
   stream_quality: 'HD',
   event_poll_interval: 15, // seconds, between two event checks
+  // Detections pushed by the camera over ONVIF, on the wired cameras that
+  // serve it. On by default: it is strictly better when it works, and the poll
+  // takes over by itself when it does not.
+  onvif_events: true,
   capture_timeout: 12, // seconds, before giving up on a capture
   image_refresh_interval: 60, // seconds, between two automatic captures (wired)
   // Battery cameras get their OWN interval: the wired one exists to keep a
@@ -148,6 +152,31 @@ function numberOrDefault(value, key) {
 }
 
 /**
+ * Read a boolean field, whatever shape the form stored it in.
+ *
+ * A checkbox may come back as a real boolean, as `'true'`/`'false'`, or as
+ * `1`/`0` depending on the Gladys version — and an absent field must keep the
+ * documented default rather than turn the option off.
+ * @param {unknown} value - The raw field value.
+ * @param {string} key - The key in `DEFAULT_CONFIG`, used as the fallback.
+ * @returns {boolean} The usable boolean.
+ * @example
+ * booleanOrDefault('false', 'onvif_events'); // false
+ */
+function booleanOrDefault(value, key) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (value === 'true' || value === '1' || value === 1) {
+    return true;
+  }
+  if (value === 'false' || value === '0' || value === 0) {
+    return false;
+  }
+  return DEFAULT_CONFIG[key];
+}
+
+/**
  * Merge the user config with the defaults, force the numeric types and parse
  * the free-text fields.
  * @param {Record<string, unknown>} [raw] - Config returned by the SDK.
@@ -168,6 +197,7 @@ export function normalizeConfig(raw = {}) {
     stream_quality: quality,
     rtsp_stream: RTSP_STREAMS[quality],
     event_poll_interval: numberOrDefault(raw.event_poll_interval, 'event_poll_interval'),
+    onvif_events: booleanOrDefault(raw.onvif_events, 'onvif_events'),
     capture_timeout: numberOrDefault(raw.capture_timeout, 'capture_timeout'),
     image_refresh_interval: numberOrDefault(raw.image_refresh_interval, 'image_refresh_interval'),
     battery_image_refresh_interval: numberOrDefault(

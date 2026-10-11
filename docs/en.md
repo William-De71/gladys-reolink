@@ -1,22 +1,33 @@
 # Reolink in Gladys
 
-This integration brings your **Reolink** cameras into Gladys: the image on the dashboard, live video, detections as scene triggers, and control of the spotlight, the siren or the PTZ presets depending on the model.
+This integration brings your **Reolink** cameras into Gladys: the image on the dashboard, live video, instant detections as scene triggers, and control of the spotlight, the siren, the infrared LEDs and the motorized heads depending on the model.
 
 Everything happens **on your local network**. No Reolink account is needed, and no image ever goes through a cloud.
 
 ## What you need
 
-- One or more Reolink cameras on the same network as Gladys.
+- One or more Reolink cameras on the same network as Gladys — standalone, or paired with a **Home Hub** or an **NVR**.
 - The username and password you use to log into those cameras (the ones from the Reolink app, usually `admin`).
 
 That is all. There is no account to create and no API key to request.
+
+> **Battery cameras** (Argus, Go…) are usually reached through their Home Hub or NVR: on their own, most of them do not offer the local API this integration uses.
 
 ## Setup
 
 1. In Gladys, open **Integrations → Install an integration** and install Reolink.
 2. In the configuration screen, fill in the **username** and **password** of your cameras.
-3. Click **Test the connection**: Gladys looks for your cameras and reports what each one can do.
-4. Go to **Discover** and run a scan: your cameras appear there, ready to be added.
+3. Click **Test the connection**: Gladys looks for your cameras and reports what each one can do, whether it reports its detections instantly, and whether its live view is available.
+4. Go to **Discover** and run a scan: your cameras appear there, ready to be added. Behind a Home Hub or an NVR, each camera becomes its own device.
+
+### Recommended camera settings
+
+Recent Reolink firmwares ship with some network services turned **off**. In the Reolink app, open **Settings → Network → Advanced → Server settings** (the wording varies slightly between app versions) and enable:
+
+- **RTSP** — needed for the live video;
+- **ONVIF** — needed for instant detections (see below).
+
+The connection test tells you, camera by camera, when RTSP is off.
 
 ### If a camera is not found
 
@@ -42,31 +53,43 @@ Cameras absent from that list use the global account.
 
 Each camera gets **the features it actually has**. The integration asks the camera rather than trusting its model name: two cameras of the same range can differ.
 
-| Feature    | On which cameras              |
-| ---------- | ----------------------------- |
-| Image      | All                           |
-| Live video | All                           |
-| Motion     | All                           |
-| Doorbell   | Video doorbells               |
-| Battery    | Battery and solar models      |
-| Spotlight  | Models with a white spotlight |
-| Siren      | Models with an alarm speaker  |
-| Infrared   | Most models                   |
-| PTZ preset | Motorized cameras             |
+| Feature                   | On which cameras                           |
+| ------------------------- | ------------------------------------------ |
+| Image                     | All                                        |
+| Live video                | All (RTSP enabled)                         |
+| Motion                    | All                                        |
+| Person / Vehicle / Animal | Models with AI detection                   |
+| Doorbell                  | Video doorbells                            |
+| Battery                   | Battery and solar models                   |
+| Spotlight                 | Models with a white spotlight              |
+| Siren                     | Models with an alarm speaker               |
+| Infrared                  | Most models                                |
+| Move (arrows)             | Motorized cameras (pan/tilt, or zoom only) |
+| Preset                    | Motorized cameras with positions saved     |
 
 ### Detections
 
-Reolink cameras keep no event log: they report their **current state**. Gladys therefore asks them regularly, and the check interval is also the detection delay. It defaults to 15 seconds; you can lower it to react faster, at the cost of questioning your cameras more often.
+There are two ways a camera reports what it sees, and the integration picks the best one for each camera on its own:
+
+- **Instantly, over ONVIF** — wired cameras reached directly **push** their motion, person, vehicle, animal and doorbell events the moment they happen, and say when they end. This is the default, as long as ONVIF is enabled on the camera.
+- **By regular checks** — battery cameras, cameras behind a Home Hub or an NVR, and cameras with ONVIF turned off are asked regularly. The check interval (15 seconds by default) is then the detection delay.
+
+If a camera stops answering over ONVIF, it falls back to regular checks by itself, and goes back to ONVIF as soon as it answers again. You can turn ONVIF off entirely with the **Instant detections (ONVIF)** option in the Advanced section.
 
 A detection also triggers an image capture, so the widget shows what happened without waiting.
 
-> **Person / vehicle / animal detection.** Recent cameras tell these three apart, but Gladys cannot display them properly yet: they would show up as features with no name and no icon. They are therefore on hold, and will come back as soon as Gladys supports them. Motion detection itself works on every camera.
+The person, vehicle and animal detections appear as motion sensors named "Person", "Vehicle" and "Animal": use them in a scene trigger like any motion sensor, for instance "when a person is detected at the gate, turn on the porch light".
 
-### PTZ presets
+### Doorbell
 
-On a motorized camera, the "Preset" feature takes a **number** — the one of the position saved in the Reolink app. The **List the PTZ presets** action shows the available numbers for each camera.
+The doorbell button appears as a **Doorbell** feature: the dashboard shows "Ringing" during a ring, then the time of the last one, and the scene editor offers **"If the doorbell rings"**.
 
-In a scene, sending `2` to that feature moves the camera to preset 2.
+### Motorized cameras (PTZ)
+
+- **Move** shows arrows on the dashboard. Each press moves the camera by one small step, which stops by itself — a scene sending a movement never leaves the camera turning. A camera with a zoom lens only gets the zoom buttons.
+- **Preset** lists the positions saved in the Reolink app, by name. Pick one to move the camera there, from the dashboard or from a scene.
+
+The list of positions is read when the camera is discovered: after saving a new position in the Reolink app, run a scan again. The **List the PTZ presets** action shows what each camera has saved right now.
 
 ## Battery protection
 
@@ -81,6 +104,8 @@ That 80% is deliberately well above the pause threshold: resuming just over it w
 The battery level and the detections keep being read in every case: they cost almost nothing, and they are what tells when the camera has recharged.
 
 A battery camera that **stops answering** — deep sleep, refused session, network down — is also brought back to on-demand: its last known level can no longer be trusted, and a silent camera is more likely to be empty than fine.
+
+Behind a Home Hub, the hub also tells which cameras are **asleep**: a sleeping camera is never woken up by the automatic refresh, whatever its level.
 
 ### A capture interval of their own
 
@@ -101,13 +126,19 @@ Every threshold is configurable, and wired cameras are never affected.
 Check the refresh interval in the Advanced section. If the camera runs on battery, it may be paused: look at its battery level.
 
 **Live video does not start.**
-Live goes through the camera RTSP stream. Check that RTSP is enabled in the camera settings (Reolink app → Settings → Advanced network → RTSP server).
+Live goes through the camera RTSP stream. Run **Test the connection**: it says when RTSP is disabled on a camera. Enable it in the Reolink app (Settings → Network → Advanced → Server settings), then run a scan again.
+
+**My detections arrive with a delay.**
+The camera is checked regularly instead of pushing its events. Run **Test the connection**: a camera listed with "detections checked periodically" either runs on battery, sits behind a Home Hub or an NVR, or has ONVIF turned off. In the last case, enable ONVIF in the Reolink app and run a scan again.
 
 **A camera was found but Gladys says the credentials are refused.**
 The account used must be allowed to read the camera settings. A restricted user works, but a "guest" account does not always have the required rights.
 
 **My spotlight switches itself off.**
-The camera applies its own lighting schedule. The integration widens that schedule when you turn the spotlight on from Gladys, but a change made afterwards in the Reolink app takes over.
+The camera applies its own lighting schedule. When you turn the spotlight on from Gladys, the integration widens that schedule to the whole day, and puts your own settings back when you turn it off from Gladys. A change made in the Reolink app in between takes over.
 
-**My battery cameras connected to a Home Hub do not appear.**
-This version handles standalone cameras. An NVR or a Home Hub exposes several cameras behind a single address, which is not supported yet.
+**The Preset list is missing a position.**
+The positions are read when the camera is discovered. Run a scan again after saving a new position in the Reolink app.
+
+**A camera behind my Home Hub does not appear.**
+The hub only lists the cameras it can currently reach. Check that the camera is powered and in range of the hub, then run a scan again.

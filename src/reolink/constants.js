@@ -81,8 +81,102 @@ export const DISCOVERY_TIMEOUT_SECONDS = 5;
 
 // --- RTSP --------------------------------------------------------------------
 
-/** The RTSP port of every Reolink camera. */
+/**
+ * The RTSP port of a Reolink camera left at its factory settings.
+ *
+ * Only the fallback: the port can be changed in the Reolink app, and
+ * `GetNetPort` reports the one actually in use (see `NET_PORT_COMMAND`).
+ */
 export const RTSP_PORT = 554;
+
+/**
+ * Command reporting the network services of a camera: which ports RTSP and
+ * ONVIF listen on, and whether they are enabled at all.
+ *
+ * Asked at discovery because recent firmwares ship with RTSP and ONVIF turned
+ * OFF: a live URL built on the default port of a disabled server fails with a
+ * timeout that says nothing about the cause, and so would an ONVIF
+ * subscription.
+ */
+export const NET_PORT_COMMAND = 'GetNetPort';
+
+// --- ONVIF events ------------------------------------------------------------
+
+/**
+ * The ONVIF port of a Reolink camera left at its factory settings. Like the RTSP
+ * one, the port actually in use comes from `GetNetPort`.
+ */
+export const ONVIF_PORT = 8000;
+
+/** Path of the ONVIF device service, identical on every Reolink firmware. */
+export const ONVIF_DEVICE_PATH = '/onvif/device_service';
+
+/**
+ * How long the camera may hold a `PullMessages` request open, in seconds.
+ *
+ * This is NOT the detection delay: the camera answers the moment something
+ * happens. It only bounds how long a quiet pull lasts before being reissued,
+ * so a longer one means fewer requests on a quiet camera.
+ */
+export const ONVIF_PULL_TIMEOUT_SECONDS = 30;
+
+/** Timeout of every other ONVIF call (capabilities, subscribe, renew). */
+export const ONVIF_REQUEST_TIMEOUT_MS = 10 * 1000;
+
+/**
+ * Margin added on top of a request timeout before the overall deadline fires.
+ *
+ * The socket timeout only measures inactivity; the deadline is what bounds a
+ * camera dripping bytes or cutting the connection mid-body.
+ */
+export const ONVIF_DEADLINE_MARGIN_MS = 2 * 1000;
+
+/** Largest SOAP answer accepted: these are a few kilobytes at most. */
+export const ONVIF_MAX_RESPONSE_BYTES = 1024 * 1024;
+
+/**
+ * Consecutive timeouts after which a quiet camera is treated as gone.
+ *
+ * One timeout is a firmware holding a quiet pull a little long; several in a row
+ * is a camera that stopped answering.
+ */
+export const ONVIF_QUIET_TIMEOUTS_BEFORE_FAILURE = 3;
+
+/**
+ * Consecutive failures after which a camera falls back to polling.
+ *
+ * Polling is the safety net, never switched off for good: as soon as the pull
+ * loop recovers, the camera goes back to ONVIF.
+ */
+export const ONVIF_FAILURES_BEFORE_FALLBACK = 3;
+
+/**
+ * When to renew the subscription, in milliseconds after it was opened.
+ *
+ * The subscription is requested for ten minutes; renewing at eight leaves room
+ * for a slow answer without the camera ever dropping it.
+ */
+export const ONVIF_RENEW_AFTER_MS = 8 * 60 * 1000;
+
+/**
+ * Pull answered this fast with nothing in it means the firmware does not hold
+ * the request open (some Reolink firmwares answer at once). The loop then
+ * spaces its pulls by `ONVIF_FAST_PULL_PAUSE_MS` instead of spinning.
+ */
+export const ONVIF_FAST_PULL_MS = 1000;
+
+/** Pause between two pulls on a firmware that does not long-poll. */
+export const ONVIF_FAST_PULL_PAUSE_MS = 1500;
+
+/**
+ * How long a detection reported over ONVIF stays up when the camera never says
+ * it ended.
+ *
+ * Much longer than the polled `DETECTION_RESET_MS`: ONVIF reports the end of a
+ * detection itself, so this is only a safety net against a lost message, and a
+ * short one would drop a motion that is still going on.
+ */
+export const ONVIF_DETECTION_RESET_MS = 5 * 60 * 1000;
 
 /**
  * RTSP paths, per quality. Reolink exposes two streams under the fixed
@@ -197,6 +291,15 @@ export const DEVICE_PARAMS = {
   CAMERA_URL: 'CAMERA_URL',
   /** Rotation applied to the live view, same contract as rtsp-camera. */
   CAMERA_ROTATION: 'CAMERA_ROTATION',
+  /**
+   * Port of the ONVIF server, '0' when the camera has none or keeps it disabled.
+   *
+   * Only ever set on a camera reached directly: behind a hub or an NVR, ONVIF
+   * events do not say which camera they come from reliably enough to be used.
+   */
+  ONVIF_PORT: 'REOLINK_ONVIF_PORT',
+  /** '1' when the camera reported its RTSP server as disabled at discovery. */
+  RTSP_DISABLED: 'REOLINK_RTSP_DISABLED',
 };
 
 /**
@@ -228,6 +331,21 @@ export const CAPABILITIES = {
   AI_VEHICLE: 'ai_vehicle',
   AI_ANIMAL: 'ai_animal',
   DOORBELL: 'doorbell',
+  PTZ_PAN_TILT: 'ptz_pan_tilt',
+  PTZ_ZOOM: 'ptz_zoom',
+};
+
+/**
+ * `ptzType` versions of `GetAbility`, and the movements each one allows.
+ *
+ * Unlike the other abilities, the `ver` here is not a "supported" flag but an
+ * enumeration of the mechanics: a zoom lens alone (the "AF" bullet cameras), a
+ * pan/tilt head without zoom, or both. Reading it as a plain boolean would put
+ * arrows on a camera that can only zoom.
+ */
+export const PTZ_TYPE_VERSIONS = {
+  ZOOM: [1, 2, 5],
+  PAN_TILT: [2, 3, 5],
 };
 
 /**
@@ -257,25 +375,54 @@ export const FEATURE_SUFFIXES = {
   FLOODLIGHT: 'floodlight',
   SIREN: 'siren',
   IR_LIGHTS: 'ir-lights',
+  // Kept as it was when this feature was a numeric switch: the value sent is
+  // still the preset NUMBER, so the scenes built on the old feature keep working.
   PTZ_PRESET: 'ptz-preset',
+  PTZ_MOVE: 'ptz-move',
+};
+
+// --- PTZ ---------------------------------------------------------------------
+
+/**
+ * Canonical values of the Gladys `camera/move` feature.
+ *
+ * Mirrors `CAMERA_MOVE` in the core (`server/utils/constants.js`, spec
+ * `docs/specs/camera-ptz-control.md` A.2). Declared here because the SDK
+ * publishes the feature TYPES but no constant for the movement VALUES.
+ */
+export const CAMERA_MOVE = {
+  STOP: 0,
+  PAN_LEFT: 1,
+  PAN_RIGHT: 2,
+  TILT_UP: 3,
+  TILT_DOWN: 4,
+  ZOOM_IN: 5,
+  ZOOM_OUT: 6,
+};
+
+/** The `PtzCtrl` operation of each movement. */
+export const PTZ_OPERATIONS = {
+  [CAMERA_MOVE.STOP]: 'Stop',
+  [CAMERA_MOVE.PAN_LEFT]: 'Left',
+  [CAMERA_MOVE.PAN_RIGHT]: 'Right',
+  [CAMERA_MOVE.TILT_UP]: 'Up',
+  [CAMERA_MOVE.TILT_DOWN]: 'Down',
+  [CAMERA_MOVE.ZOOM_IN]: 'ZoomInc',
+  [CAMERA_MOVE.ZOOM_OUT]: 'ZoomDec',
 };
 
 /**
- * Whether the AI detections (person, vehicle, animal) become Gladys features.
+ * How long one movement runs before the integration stops it, in milliseconds.
  *
- * They are held back, NOT removed: the capability detection, the polling and the
- * feature builders below all stay in place and come back by flipping this to
- * true. The reason is entirely on the Gladys side — the core knows the
- * `presence-sensor` category, but its front end only maps it to the `push` type.
- * A `presence-sensor` + `binary` feature therefore reaches the UI with no label
- * and no icon (an empty grey box in the device editor), and its history renders
- * through `LastSeenDeviceValue`, showing "seen 9 hours ago" instead of a
- * yes/no state.
- *
- * See `docs/gladys-presence-sensor-binary.md` for the upstream change that
- * makes them displayable, and flip this once it has shipped.
+ * `PtzCtrl` starts a CONTINUOUS move that only ends on `Stop`. A lone value — a
+ * scene action, a dashboard tap whose release is lost — must still end in a
+ * nudge, never in a camera spinning until someone notices, so every move is a
+ * bounded step that stops itself.
  */
-export const AI_FEATURES_ENABLED = false;
+export const PTZ_STEP_MS = 600;
+
+/** Speed of a step, 1-64. Slow enough for a step to be a nudge, not a swing. */
+export const PTZ_STEP_SPEED = 16;
 
 /**
  * How long a detection stays reported before being reset to 0.

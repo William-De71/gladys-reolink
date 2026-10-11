@@ -17,38 +17,63 @@
 //
 // Everything is read in ONE batch per camera. On a battery model each request
 // wakes the radio, so three separate reads would cost three wakeups per round.
+//
+// A wired camera reached directly can do better: over ONVIF it PUSHES its
+// detections the moment they start and end (see onvif.js). While that stream is
+// healthy the polled read stands down for the camera; the moment it fails, the
+// poll takes over again on its own, so a camera is never left unwatched.
 // -----------------------------------------------------------------------------
 
 import { logger } from '@gladysassistant/integration-sdk';
 import { cameraIds, parsePlatformId, deviceHasCapability, getParam } from '../devices.js';
 import { aiStateOf, aiTypesOf } from './capabilities.js';
 import { readSleepStates } from './channels.js';
+import { ReolinkOnvif } from './onvif.js';
+import { resolveAccount } from '../config.js';
 import {
   FEATURE_SUFFIXES,
   CAPABILITIES,
   DETECTION_RESET_MS,
+  ONVIF_DETECTION_RESET_MS,
   DEFAULT_CHANNEL,
   DEVICE_PARAMS,
-  AI_FEATURES_ENABLED,
 } from './constants.js';
 
 /**
- * The detections read on every round, and the feature each one publishes.
+ * The detections, and the feature each one publishes. The `key` is both the
+ * field `readStates` fills and the kind an ONVIF event is classified as, so the
+ * two paths publish through the very same table.
  *
  * Motion has no capability gate: every Reolink camera answers `GetMdState`.
- *
- * The three AI ones are dropped while `AI_FEATURES_ENABLED` is false: their
- * features are not created, so publishing them would target external ids no
- * device carries. They are still READ on every round (`readStates` keeps asking
- * for `GetAiState`), which costs nothing extra — the command travels in the same
- * batch — and means only this list has to change when Gladys can display them.
  */
 const DETECTIONS = [
   { capability: null, suffix: FEATURE_SUFFIXES.MOTION, key: 'motion' },
   { capability: CAPABILITIES.AI_PEOPLE, suffix: FEATURE_SUFFIXES.AI_PEOPLE, key: 'people' },
   { capability: CAPABILITIES.AI_VEHICLE, suffix: FEATURE_SUFFIXES.AI_VEHICLE, key: 'vehicle' },
   { capability: CAPABILITIES.AI_ANIMAL, suffix: FEATURE_SUFFIXES.AI_ANIMAL, key: 'animal' },
-].filter((detection) => AI_FEATURES_ENABLED || detection.key === 'motion');
+  { capability: CAPABILITIES.DOORBELL, suffix: FEATURE_SUFFIXES.DOORBELL, key: 'doorbell' },
+];
+
+/**
+ * Tell whether a device may take its detections from ONVIF.
+ * @param {object} device - The Gladys device.
+ * @param {object|null} config - The normalized configuration.
+ * @returns {boolean} True when the device has an ONVIF server worth using.
+ * @example
+ * onvifEligible(device, config);
+ */
+export function onvifEligible(device, config) {
+  if (!config || config.onvif_events === false) {
+    return false;
+  }
+  const port = Number(getParam(device, DEVICE_PARAMS.ONVIF_PORT));
+  return (
+    Number.isInteger(port) &&
+    port > 0 &&
+    Boolean(getParam(device, DEVICE_PARAMS.IP)) &&
+    !deviceHasCapability(device, CAPABILITIES.BATTERY)
+  );
+}
 
 /**
  * Read the doorbell press out of a `GetAlarm`-style answer.
@@ -95,8 +120,17 @@ export class EventWatcher {
    * @param {object} options.sessions - The shared session pool. A camera only
    * accepts a handful of sessions, so the watcher borrows the same client the
    * capture and the actuators use rather than opening its own.
+   * @param {(options: object) => object} [options.createOnvifClient] - Builds
+   * the ONVIF client of one camera; replaced in the tests.
    */
-  constructor({ gladys, batteryGuard, onDetection, sessions }) {
+  constructor({
+    gladys,
+    batteryGuard,
+    onDetection,
+    sessions,
+    createOnvifClient = (options) => new ReolinkOnvif(options),
+  }) {
+    this.createOnvifClient = createOnvifClient;
     this.gladys = gladys;
     this.batteryGuard = batteryGuard;
     this.onDetection = onDetection;
@@ -109,6 +143,12 @@ export class EventWatcher {
     this.resets = new Map();
     this.config = null;
     this.running = false;
+    /**
+     * One ONVIF client per device external id, with the fingerprint of what it
+     * was opened with, so a changed address or password reopens it.
+     * @type {Map<string, { client: object, key: string }>}
+     */
+    this.onvif = new Map();
   }
 
   /**
@@ -124,6 +164,9 @@ export class EventWatcher {
     this.timer = setInterval(() => {
       this.tick().catch((e) => logger.debug(`Reolink event check failed: ${e.message}`));
     }, config.event_poll_interval * 1000);
+    // Right away rather than at the first tick: a wired camera then reports
+    // its detections instantly from the start, not one interval later.
+    this.syncOnvif(this.gladys.devices || []);
     logger.info(`Watching the Reolink events every ${config.event_poll_interval}s`);
   }
 
@@ -139,6 +182,8 @@ export class EventWatcher {
     }
     this.resets.forEach((timer) => clearTimeout(timer));
     this.resets.clear();
+    this.onvif.forEach(({ client }) => client.stop());
+    this.onvif.clear();
     // The sessions are NOT closed here: the pool is shared with the capture and
     // the actuators, which keep working after the watcher stops. Whoever owns
     // the pool closes it on shutdown.
@@ -169,6 +214,9 @@ export class EventWatcher {
     this.running = true;
     try {
       const devices = this.gladys.devices || [];
+      // Each round reconciles the ONVIF streams with the devices: one added
+      // since gets its stream, one deleted has its subscription released.
+      this.syncOnvif(devices);
       // Before anything else: which cameras behind a hub are asleep. One command
       // per hub answers for all of them, and it is what keeps the rest of this
       // round from waking a battery camera to ask it questions its hub could
@@ -186,6 +234,94 @@ export class EventWatcher {
     } finally {
       this.running = false;
     }
+  }
+
+  /**
+   * Open, keep or close the ONVIF stream of every device.
+   * @param {object[]} devices - The Gladys devices.
+   * @example
+   * watcher.syncOnvif(gladys.devices);
+   */
+  syncOnvif(devices) {
+    const wanted = new Set();
+    devices.forEach((device) => {
+      if (!parsePlatformId(device.external_id) || !onvifEligible(device, this.config)) {
+        return;
+      }
+      const ip = getParam(device, DEVICE_PARAMS.IP);
+      const port = Number(getParam(device, DEVICE_PARAMS.ONVIF_PORT));
+      const account = resolveAccount(this.config, ip);
+      const key = JSON.stringify([ip, port, account.username, account.password]);
+      wanted.add(device.external_id);
+
+      const held = this.onvif.get(device.external_id);
+      if (held && held.key === key) {
+        return;
+      }
+      held?.client.stop();
+      const client = this.createOnvifClient({
+        ip,
+        port,
+        username: account.username,
+        password: account.password,
+        name: device.name,
+      });
+      this.onvif.set(device.external_id, { client, key });
+      client.start((event) =>
+        this.handleOnvifEvent(device.external_id, event).catch((e) =>
+          logger.debug(`Handling an ONVIF event of "${device.name}" failed: ${e.message}`),
+        ),
+      );
+    });
+
+    [...this.onvif.entries()]
+      .filter(([externalId]) => !wanted.has(externalId))
+      .forEach(([externalId, { client }]) => {
+        client.stop();
+        this.onvif.delete(externalId);
+      });
+  }
+
+  /**
+   * Tell whether a device currently gets its detections pushed over ONVIF.
+   * @param {string} externalId - The device external id.
+   * @returns {boolean} True while its stream is healthy.
+   * @example
+   * watcher.isOnvifLive(device.external_id);
+   */
+  isOnvifLive(externalId) {
+    return Boolean(this.onvif.get(externalId)?.client.isLive());
+  }
+
+  /**
+   * Publish one detection pushed by a camera.
+   * @param {string} externalId - The device external id.
+   * @param {{ kind: string, active: boolean, initial: boolean }} event - The event.
+   * @returns {Promise<void>} Resolves once published.
+   * @example
+   * await watcher.handleOnvifEvent(device.external_id, { kind: 'motion', active: true });
+   */
+  async handleOnvifEvent(externalId, event) {
+    // Looked up at event time: the device may have been renamed or re-published
+    // since the stream was opened.
+    const device = (this.gladys.devices || []).find((entry) => entry.external_id === externalId);
+    const platformId = device && parsePlatformId(device.external_id);
+    const detection = DETECTIONS.find((entry) => entry.key === event.kind);
+    if (!platformId || !detection) {
+      return;
+    }
+    if (detection.capability && !deviceHasCapability(device, detection.capability)) {
+      return;
+    }
+    const ids = cameraIds(this.gladys, platformId);
+    await this.publishDetection(device, ids.feature(detection.suffix), event.active, {
+      kind: event.kind,
+      // An ONVIF message IS a change, unlike a polled state: a detection that
+      // starts before the first poll must still fire. Only the snapshot a
+      // camera sends right after subscribing describes a past state.
+      edge: !event.initial,
+      resetMs: ONVIF_DETECTION_RESET_MS,
+    });
   }
 
   /**
@@ -267,7 +403,14 @@ export class EventWatcher {
       return;
     }
 
-    const states = await this.readStates(device, client);
+    // Pushed over ONVIF: nothing left to poll on a camera without a battery,
+    // and the detections must not be published twice from two clocks.
+    const pushed = this.isOnvifLive(device.external_id);
+    if (pushed && !deviceHasCapability(device, CAPABILITIES.BATTERY)) {
+      return;
+    }
+
+    const states = await this.readStates(device, client, { detections: !pushed });
     if (!states) {
       return;
     }
@@ -277,22 +420,19 @@ export class EventWatcher {
     if (states.battery) {
       await this.publishBattery(device, ids, states.battery);
     }
+    if (pushed) {
+      return;
+    }
 
     for (const detection of DETECTIONS) {
       if (detection.capability && !deviceHasCapability(device, detection.capability)) {
         continue;
       }
+      // The doorbell is a 1 -> 0 pulse like the others (`doorbell/ring`): its
+      // reset is what lets the dashboard go from "Ringing" back to the time of
+      // the last ring.
       await this.publishDetection(device, ids.feature(detection.suffix), states[detection.key], {
         kind: detection.key,
-      });
-    }
-
-    if (deviceHasCapability(device, CAPABILITIES.DOORBELL)) {
-      await this.publishDetection(device, ids.feature(FEATURE_SUFFIXES.DOORBELL), states.doorbell, {
-        kind: 'doorbell',
-        // A push button has no "released" state to report: Gladys treats every
-        // published 1 as one press, so the reset would count as a second one.
-        resets: false,
       });
     }
   }
@@ -301,25 +441,33 @@ export class EventWatcher {
    * Read everything a camera has to say, in one batch.
    * @param {object} device - The Gladys device.
    * @param {object} client - `{ api, camera }`.
+   * @param {object} [options] - What to read.
+   * @param {boolean} [options.detections] - False to read the battery only.
    * @returns {Promise<object|null>} The states, or null when unreadable.
    * @example
    * const states = await watcher.readStates(device, client);
    */
-  async readStates(device, client) {
+  async readStates(device, client, { detections = true } = {}) {
     // The channel of THIS camera, never a constant: behind a hub the same
     // address answers for every camera, and a wrong channel silently returns the
     // state of another one — five cameras all reporting the motion of the first.
     const channel = client.camera.channel ?? DEFAULT_CHANNEL;
 
-    const commands = [
-      { cmd: 'GetMdState', action: 0, param: { channel } },
-      { cmd: 'GetAiState', action: 0, param: { channel } },
-    ];
+    const commands = [];
+    if (detections) {
+      commands.push(
+        { cmd: 'GetMdState', action: 0, param: { channel } },
+        { cmd: 'GetAiState', action: 0, param: { channel } },
+      );
+    }
     if (deviceHasCapability(device, CAPABILITIES.BATTERY)) {
       commands.push({ cmd: 'GetBatteryInfo', action: 0, param: { channel } });
     }
-    if (deviceHasCapability(device, CAPABILITIES.DOORBELL)) {
+    if (detections && deviceHasCapability(device, CAPABILITIES.DOORBELL)) {
       commands.push({ cmd: 'GetAlarm', action: 0, param: { channel } });
+    }
+    if (commands.length === 0) {
+      return null;
     }
 
     let answers;
@@ -403,18 +551,26 @@ export class EventWatcher {
    * @param {object} options - How to treat it.
    * @param {string} options.kind - What it is, for the logs and the callback.
    * @param {boolean} [options.resets] - Whether it must come back down.
+   * @param {boolean} [options.edge] - The value is a CHANGE reported by the
+   * camera, not a state read: it is published even before any baseline.
+   * @param {number} [options.resetMs] - How long before forcing it back down.
    * @returns {Promise<void>} Resolves once published.
    * @example
    * await watcher.publishDetection(device, featureId, true, { kind: 'motion' });
    */
-  async publishDetection(device, featureId, detected, { kind, resets = true }) {
+  async publishDetection(
+    device,
+    featureId,
+    detected,
+    { kind, resets = true, edge = false, resetMs = DETECTION_RESET_MS },
+  ) {
     const previous = this.published.get(featureId);
     const value = detected ? 1 : 0;
 
     if (previous === value) {
       if (detected && resets) {
         // Still firing: push the reset back rather than let it fire mid-detection.
-        this.scheduleReset(featureId);
+        this.scheduleReset(featureId, resetMs);
       }
       return;
     }
@@ -423,10 +579,10 @@ export class EventWatcher {
     // harmless, but publishing a 1 would fire the scenes of a detection that
     // started before Gladys was even watching.
     const isFirstRound = previous === undefined;
-    if (isFirstRound && detected) {
+    if (isFirstRound && detected && !edge) {
       this.published.set(featureId, value);
       if (resets) {
-        this.scheduleReset(featureId);
+        this.scheduleReset(featureId, resetMs);
       }
       return;
     }
@@ -442,7 +598,7 @@ export class EventWatcher {
 
     logger.info(`${kind} detected on "${device.name}"`);
     if (resets) {
-      this.scheduleReset(featureId);
+      this.scheduleReset(featureId, resetMs);
     }
     if (this.onDetection) {
       // Best effort: a failed capture must not lose the detection itself.
@@ -460,10 +616,11 @@ export class EventWatcher {
    * a camera that goes unreachable, or a firmware that latches its flag, would
    * otherwise leave the sensor triggered indefinitely.
    * @param {string} featureId - The feature external id.
+   * @param {number} [delayMs] - How long before the reset.
    * @example
    * watcher.scheduleReset(featureId);
    */
-  scheduleReset(featureId) {
+  scheduleReset(featureId, delayMs = DETECTION_RESET_MS) {
     const pending = this.resets.get(featureId);
     if (pending) {
       clearTimeout(pending);
@@ -477,7 +634,7 @@ export class EventWatcher {
       await this.gladys
         .publishState(featureId, 0)
         .catch((e) => logger.debug(`Resetting the detection failed: ${e.message}`));
-    }, DETECTION_RESET_MS);
+    }, delayMs);
     this.resets.set(featureId, timer);
   }
 }
