@@ -1,3 +1,9 @@
+## [1.3.0](https://github.com/William-De71/gladys-reolink/compare/v1.2.0...v1.3.0) (2026-10-11)
+
+### Features
+
+* **reolink:** instant ONVIF detections, native PTZ controls and doorbell ring ([5049ead](https://github.com/William-De71/gladys-reolink/commit/5049ead6b23f1a2aeb5da64786429a8c5332611b))
+
 ## [1.2.0](https://github.com/William-De71/gladys-reolink/compare/v1.1.0...v1.2.0) (2026-08-26)
 
 ### Features
