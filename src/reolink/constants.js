@@ -369,6 +369,7 @@ export const FEATURE_SUFFIXES = {
   MOTION: 'motion',
   DOORBELL: 'doorbell',
   BATTERY: 'battery',
+  BATTERY_CHARGING: 'battery-charging',
   AI_PEOPLE: 'ai-people',
   AI_VEHICLE: 'ai-vehicle',
   AI_ANIMAL: 'ai-animal',

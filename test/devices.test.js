@@ -15,7 +15,9 @@ import {
 import { normalizeConfig } from '../src/config.js';
 import { buildRtspUrl } from '../src/reolink/rtsp.js';
 import { CAPABILITIES, DEVICE_PARAMS, CAMERA_MOVE } from '../src/reolink/constants.js';
+import { DEVICE_FEATURE_CATEGORIES, DEVICE_FEATURE_TYPES } from '@gladysassistant/integration-sdk';
 import { fakeGladys, fakeDevice } from './helpers/fakeGladys.js';
+import { SAMPLE_CAMERAS } from './helpers/samples.js';
 
 const gladys = fakeGladys();
 
@@ -159,6 +161,39 @@ test('a feature is only created for a capability the camera announced', () => {
   assert.ok(loaded.some((feature) => feature.category === 'light'));
   assert.ok(loaded.some((feature) => feature.category === 'siren'));
   assert.ok(loaded.some((feature) => feature.name === 'Garden - Person'));
+});
+
+test('a battery camera tells whether it is charging', () => {
+  const features = buildFeatures(gladys, camera({ capabilities: [CAPABILITIES.BATTERY] }));
+  const charging = features.find((feature) => feature.type === 'charging');
+  assert.ok(charging);
+  assert.equal(charging.category, 'battery');
+  assert.match(charging.external_id, /:battery-charging$/);
+  assert.equal(charging.read_only, true);
+  assert.deepEqual([charging.min, charging.max], [0, 1]);
+
+  assert.ok(!buildFeatures(gladys, camera()).some((feature) => feature.type === 'charging'));
+});
+
+test('every feature uses a category and type pair Gladys knows', () => {
+  // Gladys does not validate the pair: an unknown one is created without an
+  // icon, a label or a place in the scene editor.
+  const known = (category, type) =>
+    Object.entries(DEVICE_FEATURE_CATEGORIES).some(
+      ([key, value]) =>
+        value === category &&
+        Object.values(DEVICE_FEATURE_TYPES[key] ?? DEVICE_FEATURE_TYPES.SENSOR).includes(type),
+    );
+  for (const sample of Object.values(SAMPLE_CAMERAS)) {
+    const all = buildFeatures(gladys, {
+      ...sample,
+      capabilities: [...sample.capabilities, ...Object.values(CAPABILITIES)],
+      presets: [{ id: 1, name: 'Gate' }],
+    });
+    for (const feature of all) {
+      assert.ok(known(feature.category, feature.type), `${feature.category}/${feature.type}`);
+    }
+  }
 });
 
 test('a doorbell gets the doorbell ring feature, an ordinary camera does not', () => {

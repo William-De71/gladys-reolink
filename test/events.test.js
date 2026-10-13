@@ -390,6 +390,37 @@ test('forgetting a camera leaves the other cameras alone', async () => {
   assert.deepEqual([...watcher.published.keys()], ['ext:ext-dev-reolink:camera:OTHER:motion']);
 });
 
+test('the charging state is published when it changes', async () => {
+  const { watcher, gladys, device, sessions } = setup({
+    answers: { GetBatteryInfo: { Battery: { batteryPercent: 60, chargeStatus: 1 } } },
+    capabilities: 'battery',
+    batteryGuard: new BatteryGuard(),
+  });
+  device.features = [{ external_id: `${device.external_id}:battery-charging` }];
+
+  await watcher.checkDevice(device);
+  await watcher.checkDevice(device);
+  // Full on its charger: no longer being recharged.
+  sessions.swap({
+    api: fakeApi({ GetBatteryInfo: { Battery: { batteryPercent: 100, chargeStatus: 2 } } }),
+    camera: { name: device.name, channel: 0 },
+  });
+  await watcher.checkDevice(device);
+  assert.deepEqual(statesFor(gladys, 'battery-charging'), [1, 0]);
+});
+
+test('a camera created before the charging feature is not sent its state', async () => {
+  // Gladys would refuse a state for a feature the device does not have.
+  const { watcher, gladys, device } = setup({
+    answers: { GetBatteryInfo: { Battery: { batteryPercent: 60, chargeStatus: 1 } } },
+    capabilities: 'battery',
+    batteryGuard: new BatteryGuard(),
+  });
+  await watcher.checkDevice(device);
+  assert.deepEqual(statesFor(gladys, 'battery-charging'), []);
+  assert.deepEqual(statesFor(gladys, 'battery'), [60]);
+});
+
 test('a camera without battery is not asked for one', async () => {
   // Every request wakes the radio of a battery model, so the batch only carries
   // what the camera can actually answer.

@@ -37,6 +37,7 @@ import {
   ONVIF_DETECTION_RESET_MS,
   DEFAULT_CHANNEL,
   DEVICE_PARAMS,
+  CHARGE_STATUS,
 } from './constants.js';
 
 /**
@@ -553,16 +554,40 @@ export class EventWatcher {
       );
     }
 
-    const featureId = ids.feature(FEATURE_SUFFIXES.BATTERY);
     // A battery moves slowly: publishing an unchanged percentage every round
     // would add a point per poll to the history for no information.
-    if (this.published.get(featureId) === level) {
+    await this.publishChanged(ids.feature(FEATURE_SUFFIXES.BATTERY), level, 'battery level');
+
+    // Only `charging` counts here, unlike the guard: a camera that sits full on
+    // its charger (`chargeComplete`) is no longer being recharged, which is what
+    // Gladys means by this feature. Published only to a device that has the
+    // feature: a camera created before it existed would get refused states.
+    const chargingId = ids.feature(FEATURE_SUFFIXES.BATTERY_CHARGING);
+    const status = battery.chargeStatus;
+    const hasFeature = (device.features || []).some((entry) => entry.external_id === chargingId);
+    if (hasFeature && status !== undefined && status !== null && Number.isFinite(Number(status))) {
+      const charging = Number(status) === CHARGE_STATUS.CHARGING ? 1 : 0;
+      await this.publishChanged(chargingId, charging, 'charging state');
+    }
+  }
+
+  /**
+   * Publish a value only when it differs from the last one published.
+   * @param {string} featureId - The feature external id.
+   * @param {number} value - The value.
+   * @param {string} what - What it is, for the logs.
+   * @returns {Promise<void>} Resolves once published.
+   * @example
+   * await watcher.publishChanged(featureId, 80, 'battery level');
+   */
+  async publishChanged(featureId, value, what) {
+    if (this.published.get(featureId) === value) {
       return;
     }
-    this.published.set(featureId, level);
+    this.published.set(featureId, value);
     await this.gladys
-      .publishState(featureId, level)
-      .catch((e) => logger.debug(`Publishing the battery level failed: ${e.message}`));
+      .publishState(featureId, value)
+      .catch((e) => logger.debug(`Publishing the ${what} failed: ${e.message}`));
   }
 
   /**

@@ -207,3 +207,10 @@ test('the user documentation exists in the four languages of Gladys', () => {
     assert.ok(doc.length > 1000, `docs/${language}.md looks empty`);
   }
 });
+
+test('the minimum Gladys version covers the battery charging feature', () => {
+  // battery/charging appeared in Gladys 5.0.0: an older core rejects the whole
+  // discovery batch that carries it.
+  const [major] = manifest.gladys_version.replace(/^>=/, '').split('.').map(Number);
+  assert.ok(major >= 5, manifest.gladys_version);
+});

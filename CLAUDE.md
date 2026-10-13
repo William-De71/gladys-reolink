@@ -92,7 +92,7 @@ docs/{en,fr,de,es}.md       user documentation, re-hosted by the store
 - **Manifest.** Texts are objects `{ "en", "fr", "de", "es" }`; the catalog
   `description` holds 10 to 100 characters per language, the whole file stays
   under the 100 KB of the store. A feature type or a field older cores do not
-  know needs a higher `gladys_version` minimum (see `src/constants.js` of the
-  integration-store).
+  know needs a higher `gladys_version` minimum (`battery/charging` needs 5.0.0;
+  see also `src/constants.js` of the integration-store).
 - **Style.** Prettier formats, ESLint catches mistakes. Comments explain why,
   in English. Tests never touch the network or a real camera.

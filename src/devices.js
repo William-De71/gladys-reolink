@@ -10,6 +10,7 @@
 //                          / animal AI detections on the models that run them;
 //   doorbell/ring          the doorbell press (doorbell models);
 //   battery/integer        the battery level (battery models);
+//   battery/charging       whether that battery is being recharged (idem);
 //   light/binary           the spotlight;
 //   siren/binary           the siren;
 //   switch/binary          the infrared LEDs;
@@ -259,6 +260,19 @@ export function buildFeatures(gladys, camera) {
       has_feedback: false,
       min: 0,
       max: 100,
+    });
+    features.push({
+      name: `${camera.name} - Charging`,
+      external_id: ids.feature(FEATURE_SUFFIXES.BATTERY_CHARGING),
+      // Gladys 5.0.0+: "Charging" on the dashboard, and a scene can tell when a
+      // solar panel or a charger starts or stops refilling the camera.
+      category: DEVICE_FEATURE_CATEGORIES.BATTERY,
+      type: DEVICE_FEATURE_TYPES.BATTERY.CHARGING,
+      read_only: true,
+      keep_history: true,
+      has_feedback: false,
+      min: 0,
+      max: 1,
     });
   }
 
