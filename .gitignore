@@ -12,3 +12,6 @@ coverage/
 
 # Temporary files of the Release workflow
 release-notes.md
+
+# Forum post drafts: pasted by hand on the forum, never versioned
+.github/forum-*.md

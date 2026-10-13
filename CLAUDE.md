@@ -77,7 +77,7 @@ docs/{en,fr,de,es}.md       user documentation, re-hosted by the store
   written today); captures go through pipes, never temporary files.
 - **Four languages.** Every user-facing text (manifest, action results,
   `docs/*.md`, README) exists in English, French, German and Spanish, with the
-  vocabulary of the Gladys interface. Feature
+  vocabulary of the Gladys interface. `test/i18n.test.js` checks it. Feature
   names stay English: Gladys translates its own categories, and the user
   renames devices freely.
 - **Versions belong to the Release workflow**: never edit `version` in

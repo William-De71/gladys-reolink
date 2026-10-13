@@ -8,6 +8,7 @@ Tout se passe **sur votre réseau local**. Aucun compte Reolink n'est nécessair
 
 - Une ou plusieurs caméras Reolink sur le même réseau que Gladys — autonomes, ou associées à un **Home Hub** ou un **NVR**.
 - L'identifiant et le mot de passe que vous utilisez pour vous connecter à ces caméras (ceux de l'application Reolink, généralement `admin`).
+- Gladys 5.0.0 ou plus récent.
 
 C'est tout. Il n'y a ni compte à créer, ni clé d'API à demander.
 
@@ -61,6 +62,7 @@ Chaque caméra reçoit **les fonctionnalités qu'elle possède réellement**. L'
 | Personne / Véhicule / Animal | Modèles avec détection IA                           |
 | Sonnette                     | Sonnettes vidéo                                     |
 | Batterie                     | Modèles sur batterie et solaires                    |
+| En charge                    | Modèles sur batterie et solaires                    |
 | Projecteur                   | Modèles avec projecteur blanc                       |
 | Sirène                       | Modèles avec haut-parleur d'alarme                  |
 | Infrarouge                   | La plupart des modèles                              |
@@ -90,6 +92,10 @@ Le bouton de la sonnette apparaît comme une fonctionnalité **Sonnette** : le t
 - **Position** liste, par leur nom, les positions enregistrées dans l'application Reolink. Choisissez-en une pour y envoyer la caméra, depuis le tableau de bord ou une scène.
 
 La liste des positions est lue à la découverte de la caméra : après avoir enregistré une nouvelle position dans l'application Reolink, relancez un scan. L'action **Lister les positions PTZ** montre ce que chaque caméra a enregistré à l'instant.
+
+### En charge
+
+Les caméras sur batterie et solaires reçoivent aussi une fonctionnalité **En charge** : elle est active pendant que la caméra se recharge, sur son chargeur ou grâce à son panneau solaire, et inactive une fois la batterie pleine ou débranchée. Utilisez-la dans une scène — « quand la caméra du jardin cesse de se recharger, préviens-moi » — ou simplement pour vérifier qu'un panneau solaire fait toujours son travail.
 
 ## Protection de la batterie
 
@@ -142,3 +148,6 @@ Les positions sont lues à la découverte de la caméra. Relancez un scan après
 
 **Une caméra de mon Home Hub n'apparaît pas.**
 Le hub ne liste que les caméras qu'il peut joindre à cet instant. Vérifiez que la caméra est alimentée et à portée du hub, puis relancez un scan.
+
+**Une caméra sur batterie ajoutée avant la version 1.4.0 n'a pas de fonctionnalité En charge.**
+La fonctionnalité est nouvelle : ouvrez **Découverte**, lancez un scan et **mettez à jour** la caméra. La fonctionnalité est ajoutée ; les autres, leur historique et vos scènes sont conservés.

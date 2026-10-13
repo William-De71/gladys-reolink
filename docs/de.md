@@ -8,6 +8,7 @@ Alles läuft **in Ihrem lokalen Netzwerk**. Ein Reolink-Konto ist nicht nötig, 
 
 - Eine oder mehrere Reolink-Kameras im selben Netzwerk wie Gladys — eigenständig oder mit einem **Home Hub** oder einem **NVR** gekoppelt.
 - Den Benutzernamen und das Passwort, mit denen Sie sich an diesen Kameras anmelden (die aus der Reolink-App, meist `admin`).
+- Gladys 5.0.0 oder neuer.
 
 Das ist alles. Es muss weder ein Konto angelegt noch ein API-Schlüssel beantragt werden.
 
@@ -61,6 +62,7 @@ Jede Kamera erhält **die Funktionen, die sie tatsächlich hat**. Die Integratio
 | Person / Fahrzeug / Tier | Modelle mit KI-Erkennung                              |
 | Türklingel               | Video-Türklingeln                                     |
 | Akku                     | Akku- und Solarmodelle                                |
+| Wird geladen             | Akku- und Solarmodelle                                |
 | Scheinwerfer             | Modelle mit weißem Scheinwerfer                       |
 | Sirene                   | Modelle mit Alarmlautsprecher                         |
 | Infrarot                 | Die meisten Modelle                                   |
@@ -90,6 +92,10 @@ Der Klingelknopf erscheint als Funktion **Türklingel**: Das Dashboard zeigt wä
 - **Position** listet die in der Reolink-App gespeicherten Positionen nach Namen auf. Wählen Sie eine aus, um die Kamera dorthin zu fahren — im Dashboard oder in einer Szene.
 
 Die Positionsliste wird beim Entdecken der Kamera gelesen: Starten Sie nach dem Speichern einer neuen Position in der Reolink-App erneut eine Suche. Die Aktion **PTZ-Positionen auflisten** zeigt, was jede Kamera gerade gespeichert hat.
+
+### Wird geladen
+
+Akku- und Solarkameras erhalten außerdem eine Funktion **Wird geladen**: Sie ist aktiv, solange die Kamera geladen wird — am Ladegerät oder über ihr Solarpanel — und inaktiv, sobald der Akku voll oder die Kamera abgesteckt ist. Nutzen Sie sie in einer Szene — „wenn die Gartenkamera aufhört zu laden, benachrichtige mich“ — oder einfach, um zu prüfen, ob ein Solarpanel noch seine Arbeit tut.
 
 ## Akkuschutz
 
@@ -142,3 +148,6 @@ Die Positionen werden beim Entdecken der Kamera gelesen. Starten Sie erneut eine
 
 **Eine Kamera meines Home Hubs erscheint nicht.**
 Der Hub listet nur die Kameras auf, die er gerade erreichen kann. Prüfen Sie, ob die Kamera Strom hat und in Reichweite des Hubs ist, und starten Sie dann erneut eine Suche.
+
+**Eine vor Version 1.4.0 hinzugefügte Akkukamera hat keine Funktion „Wird geladen“.**
+Die Funktion ist neu: Öffnen Sie **Entdecken**, starten Sie eine Suche und **aktualisieren** Sie die Kamera. Die Funktion wird hinzugefügt; die bestehenden Funktionen, ihr Verlauf und Ihre Szenen bleiben erhalten.
