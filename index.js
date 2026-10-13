@@ -402,6 +402,7 @@ gladys.onSetValue(async (device, feature, value) => {
         } else if (!on) {
           floodlightSettings.delete(device.external_id);
         }
+        await publishCommandedState(feature, on);
         break;
       }
       case FEATURE_SUFFIXES.SIREN:
@@ -409,6 +410,7 @@ gladys.onSetValue(async (device, feature, value) => {
         break;
       case FEATURE_SUFFIXES.IR_LIGHTS:
         await setIrLights(client.api, on, { channel: client.camera.channel });
+        await publishCommandedState(feature, on);
         break;
       case FEATURE_SUFFIXES.PTZ_MOVE:
         // A bounded step that stops itself: a lone value from a scene must
@@ -516,12 +518,40 @@ async function publishActuatorStates(device) {
   // wakeup, and this runs on every poll.
   const states = await readActuatorStates(client, device);
 
-  for (const [suffix, state] of Object.entries(states)) {
-    if (state === null) {
-      continue;
-    }
-    await gladys.publishState(ids.feature(suffix), state ? 1 : 0).catch(() => {});
-  }
+  // Changes only: this runs every minute per camera, and an unchanged light
+  // re-published each time would add a history point per minute and eat into
+  // the 300 states per minute Gladys accepts from the integration.
+  await gladys
+    .publishChangedStates(
+      Object.entries(states)
+        .filter(([, state]) => state !== null)
+        .map(([suffix, state]) => ({
+          device_feature_external_id: ids.feature(suffix),
+          state: state ? 1 : 0,
+        })),
+    )
+    .catch((e) =>
+      logger.debug(`Publishing the actuators of "${device.name}" failed: ${e.message}`),
+    );
+}
+
+/**
+ * Publish the state an actuator was just switched to.
+ *
+ * The spotlight and the infrared LEDs are declared `has_feedback`: Gladys does
+ * not record the value it sent and waits for the integration to report it.
+ * Without this, the dashboard switch would flip back until the next poll read
+ * the camera, up to a minute later.
+ * @param {object} feature - The feature that was set.
+ * @param {boolean} on - The state the camera accepted.
+ * @returns {Promise<void>} Resolves once published.
+ * @example
+ * await publishCommandedState(feature, true);
+ */
+async function publishCommandedState(feature, on) {
+  await gladys
+    .publishChangedStates([{ device_feature_external_id: feature.external_id, state: on ? 1 : 0 }])
+    .catch((e) => logger.debug(`Publishing ${feature.external_id} failed: ${e.message}`));
 }
 
 /**
@@ -668,6 +698,45 @@ gladys.onAction('refresh_images', async () => {
   // camera below the hard limit reports a failure instead of being captured.
   const { published, failures } = await refreshImages(cameras, { force: true });
   return refreshResult(published, failures);
+});
+
+// --- A camera was just added by the user -------------------------------------
+// Gladys drops the states of a feature that does not exist yet, so everything
+// read before this moment (battery level, spotlight, detections, image) never
+// reached the new device — and the watcher only publishes CHANGES, so a steady
+// battery or light would have stayed blank for hours.
+gladys.onDeviceCreated(async (device) => {
+  if (!parsePlatformId(device.external_id) || !isConfigured(config)) {
+    return;
+  }
+  logger.info(`"${device.name}" was added -> publishing its current state`);
+
+  // The SDK already forgot what publishChangedStates sent; the watcher keeps
+  // its own memory of the battery and detections, forgotten here too.
+  watcher.forgetDevice(device.external_id);
+  if (isBatteryDevice(device)) {
+    batteryGuard.trackBatteryCamera(device.external_id);
+  }
+  // Open its ONVIF stream now rather than at the next watcher round.
+  watcher.syncOnvif(gladys.devices || []);
+
+  await publishActuatorStates(device).catch((e) =>
+    logger.debug(`Reading the actuators of "${device.name}" failed: ${e.message}`),
+  );
+  // Battery first, as in onPoll: the capture below is decided on this reading.
+  await watcher
+    .checkDevice(device)
+    .catch((e) => logger.debug(`First read of "${device.name}" failed: ${e.message}`));
+
+  if (!batteryGuard.allowsScheduled(device.external_id)) {
+    return;
+  }
+  try {
+    const image = await captureDeviceImage(device);
+    await gladys.publishCameraImage(device.external_id, image);
+  } catch (e) {
+    logger.warn(`Capturing the first image of "${device.name}" failed: ${e.message}`);
+  }
 });
 
 // --- Configuration updated by the user ---------------------------------------

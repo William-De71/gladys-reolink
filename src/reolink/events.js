@@ -190,6 +190,28 @@ export class EventWatcher {
   }
 
   /**
+   * Forget what was published for one camera, so its next check publishes its
+   * battery and detections again instead of judging them unchanged.
+   *
+   * Needed when the user (re)creates the device: Gladys drops the states sent
+   * before a feature exists, so what this watcher remembers as published never
+   * reached it.
+   * @param {string} deviceExternalId - The device external id.
+   * @example
+   * watcher.forgetDevice(device.external_id);
+   */
+  forgetDevice(deviceExternalId) {
+    const prefix = `${deviceExternalId}:`;
+    [...this.published.keys()]
+      .filter((featureId) => featureId.startsWith(prefix))
+      .forEach((featureId) => {
+        this.published.delete(featureId);
+        clearTimeout(this.resets.get(featureId));
+        this.resets.delete(featureId);
+      });
+  }
+
+  /**
    * The API client of one device, opened once and reused.
    * @param {object} device - The Gladys device.
    * @returns {object|null} `{ api, camera }`, or null when unreachable.

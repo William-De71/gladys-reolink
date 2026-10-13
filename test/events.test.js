@@ -362,6 +362,34 @@ test('an unchanged battery level is not republished', async () => {
   assert.deepEqual(statesFor(gladys, 'battery'), [80]);
 });
 
+test('a forgotten camera publishes its battery and detections again', async () => {
+  // The user creates the device: Gladys dropped every state sent before, so
+  // an unchanged level must still reach the new device once.
+  const { watcher, gladys, device } = setup({
+    answers: {
+      GetMdState: { state: 0 },
+      GetBatteryInfo: { Battery: { batteryPercent: 80, chargeStatus: 0 } },
+    },
+    capabilities: 'battery',
+    batteryGuard: new BatteryGuard(),
+  });
+
+  await watcher.checkDevice(device);
+  watcher.forgetDevice(device.external_id);
+  await watcher.checkDevice(device);
+  assert.deepEqual(statesFor(gladys, 'battery'), [80, 80]);
+  assert.deepEqual(statesFor(gladys, 'motion'), [0, 0]);
+});
+
+test('forgetting a camera leaves the other cameras alone', async () => {
+  const { watcher, device } = setup({ answers: { GetMdState: { state: 0 } } });
+  await watcher.checkDevice(device);
+  watcher.published.set('ext:ext-dev-reolink:camera:OTHER:motion', 0);
+
+  watcher.forgetDevice(device.external_id);
+  assert.deepEqual([...watcher.published.keys()], ['ext:ext-dev-reolink:camera:OTHER:motion']);
+});
+
 test('a camera without battery is not asked for one', async () => {
   // Every request wakes the radio of a battery model, so the batch only carries
   // what the camera can actually answer.

@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "node --test"
+    "test": "node --test --experimental-test-module-mocks"
   },
   "engines": {
     "node": ">=22.20"

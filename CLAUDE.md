@@ -69,6 +69,8 @@ docs/{en,fr,de,es}.md       user documentation, re-hosted by the store
   created: the image refresh loop in `index.js` exists for the cameras created
   before polling was declared.
 - **States.** Publish changes only (300 states per minute per integration).
+  States sent before a device is created are dropped: `onDeviceCreated`
+  republishes everything of the new camera.
 - **Battery cameras.** Every capture wakes the radio: never add a request on a
   timer without going through `BatteryGuard` and the sleep states of the hub.
 - **The container rootfs is read-only.** Write only under `/data` (nothing is
