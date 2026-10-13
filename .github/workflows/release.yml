@@ -1,155 +1,228 @@
 # -----------------------------------------------------------------------------
-# Cut a new release — entirely from the GitHub UI, no local tooling needed.
+# Automatic release, on every push to main.
 #
-# In GitHub: Actions -> Release -> "Run workflow" -> pick patch / minor / major.
+#   1. ci        the quality gate (ci.yml): no green CI, no release;
+#   2. plan      the version, from the Conventional Commits since the last tag
+#                (.github/scripts/release.mjs): `feat` -> minor, `fix` / `perf`
+#                -> patch, `!` or `BREAKING CHANGE` -> major (minor below
+#                1.0.0). `docs`, `chore`, `ci`, `test`, `style`, `refactor`,
+#                `build` alone release nothing and the run stops here;
+#   3. build     the multi-arch image `:X.Y.Z` + `:latest` (build.yml);
+#   4. verify    the image is pullable without authentication (amd64 and
+#                arm64), the store validator passes WITH its image check, the
+#                repository carries the store topic;
+#   5. publish   the release commit `chore(release): X.Y.Z` (manifest,
+#                package.json, lockfile, CHANGELOG.md) and the `vX.Y.Z` tag,
+#                pushed together (--atomic);
+#   6. github-release  the GitHub Release, its notes = the CHANGELOG section.
 #
-# What it does, in one run:
-#   1. computes the next semver from `package.json` (npm version rules);
-#   2. writes it into `package.json`, `package-lock.json` AND the manifest
-#      (`gladys-assistant-integration.json`: both `version` and the
-#      `docker_image` tag, so the indexer and the image stay in lockstep);
-#   3. regenerates CHANGELOG.md from the Conventional Commits since the last
-#      tag (see changelog.config.mjs), so it ships in the release commit;
-#   4. commits the bump and pushes the `vX.Y.Z` tag;
-#   5. publishes a GitHub release carrying this version's changelog entry;
-#   6. calls build.yml to publish the multi-arch image (`:X.Y.Z` + `:latest`).
+# Order matters: the manifest on main (what the store indexes) announces a
+# version only once its image exists, otherwise the store could drop the
+# integration or never offer the update.
 #
-# Why call build.yml instead of relying on the tag push: a tag pushed with the
-# default GITHUB_TOKEN does NOT trigger other workflows, so we invoke the build
-# ourselves. No personal access token to create.
+# Manual run (Actions -> Release -> Run workflow): `release-as` forces a
+# version (e.g. 1.0.0), `dry-run` only prints the version and the notes in the
+# job summary, publishing nothing.
+#
+# The release commit is pushed with GITHUB_TOKEN, which triggers no workflow:
+# it cannot start another release (the `if` below guards it anyway). A
+# protected main rejects that push: allow GitHub Actions to bypass the rule
+# (ruleset bypass list), or push through a GitHub App token — never a PAT.
 # -----------------------------------------------------------------------------
 name: Release
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
-      release-type:
-        description: 'Version bump for this release'
-        required: true
-        type: choice
-        default: patch
-        options:
-          - patch
-          - minor
-          - major
+      release-as:
+        description: 'Force this version (x.y.z), e.g. 1.0.0. Empty: from the commits'
+        required: false
+        default: ''
+        type: string
+      dry-run:
+        description: 'Only show the version and the notes, publish nothing'
+        required: false
+        default: false
+        type: boolean
+
+# One release at a time, never cancelled half-way.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions: {}
 
 jobs:
-  prepare:
+  ci:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      !startsWith(github.event.head_commit.message, 'chore(release):')
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  plan:
+    needs: ci
     runs-on: ubuntu-latest
     permissions:
-      contents: write # commit the version bump and push the tag
+      contents: read
     outputs:
-      version: ${{ steps.bump.outputs.version }}
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # every tag and commit, to read the history
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: npm
 
-      # conventional-changelog and its preset are devDependencies, pinned in
-      # package-lock.json so a release always renders the changelog the same way.
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Bump version and update the manifest
-        id: bump
+      - name: Compute the next version
+        id: plan
         env:
-          RELEASE_TYPE: ${{ inputs.release-type }}
-        run: |
-          set -euo pipefail
+          RELEASE_AS: ${{ inputs.release-as }}
+        run: node .github/scripts/release.mjs plan --release-as "$RELEASE_AS"
 
-          # npm computes the next semver and writes it to package.json (and
-          # package-lock.json). --no-git-tag-version: we own the commit + tag
-          # below, so npm must not touch git.
-          new_version="$(npm version "$RELEASE_TYPE" --no-git-tag-version | tail -n1)"
-          new_version="${new_version#v}" # v1.2.0 -> 1.2.0
-
-          image="ghcr.io/${GITHUB_REPOSITORY,,}:${new_version}"
-
-          # Keep the manifest in lockstep: the version the indexer reads AND the
-          # image tag Gladys pulls must both point at this release.
-          tmp="$(mktemp)"
-          jq --arg version "$new_version" --arg image "$image" \
-            '.version = $version | .docker_image = $image' \
-            gladys-assistant-integration.json > "$tmp"
-          mv "$tmp" gladys-assistant-integration.json
-
-          # jq reprints the whole file with its own style (it expands short
-          # arrays over several lines), which does not match .prettierrc.json
-          # and makes the `prettier --check .` gate of ci.yml fail on the very
-          # next push. Reformat what jq just wrote, with the same Prettier
-          # range as the devDependency so both jobs agree on the output.
-          npx --yes "prettier@$(node -p "require('./package.json').devDependencies.prettier")" \
-            --write gladys-assistant-integration.json
-
-          echo "version=${new_version}" >> "$GITHUB_OUTPUT"
-
-      # Must run AFTER the bump: conventional-changelog reads the new version
-      # from package.json to title the section it prepends (the tag does not
-      # exist yet at this point).
-      - name: Update the changelog
-        run: |
-          set -euo pipefail
-          npm run changelog
-          # `-s` prepends and leaves a leading blank line behind; strip it so
-          # the file does not grow one extra blank line per release.
-          printf '%s\n' "$(cat CHANGELOG.md)" > CHANGELOG.md
-
-      # The notes for THIS version only: everything between the first heading
-      # and the next one. Feeds the GitHub release created below.
-      - name: Extract this version's notes
-        id: notes
-        run: |
-          set -euo pipefail
-          awk 'NR>1 && /^## /{exit} {print}' CHANGELOG.md > release-notes.md
-          cat release-notes.md
-
-      # Note: if the branch you release from is protected against direct pushes,
-      # GitHub rejects the push below (the default GITHUB_TOKEN cannot bypass
-      # branch protection). Allow GitHub Actions to bypass the rule, or release
-      # from an unprotected branch.
-      - name: Commit, tag and push
+      - name: Summary
         env:
-          VERSION: ${{ steps.bump.outputs.version }}
+          RELEASE: ${{ steps.plan.outputs.release }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          DRY_RUN: ${{ inputs.dry-run }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          {
+            if [ "$RELEASE" != "true" ]; then
+              echo "## No release"
+              echo ""
+              echo "No \`feat\`, \`fix\`, \`perf\` or breaking commit since the last tag (current version: ${VERSION})."
+            else
+              # Render the changelog on a throw-away copy, to show the notes.
+              node .github/scripts/release.mjs changelog "$VERSION" "$REPO_URL"
+              if [ "$DRY_RUN" = "true" ]; then
+                echo "## Dry run: version ${VERSION} (nothing published)"
+              else
+                echo "## Releasing version ${VERSION}"
+              fi
+              echo ""
+              node .github/scripts/release.mjs notes "$VERSION" < CHANGELOG.md
+              git checkout -- CHANGELOG.md 2>/dev/null || rm -f CHANGELOG.md
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
-          git add package.json package-lock.json gladys-assistant-integration.json CHANGELOG.md
-          git commit -m "chore(release): ${VERSION}"
-          git tag -a "v${VERSION}" -m "Release ${VERSION}"
-
-          # One atomic push for the branch AND the tag. Two separate pushes let
-          # the second one send only the tag object (git assumes the commit is
-          # already on the remote), which GitHub sometimes rejects with
-          # "missing necessary objects" — leaving a bumped branch without its
-          # tag, release or image.
-          git push --atomic origin "HEAD:${GITHUB_REF_NAME}" "refs/tags/v${VERSION}"
-
-      # Publish the release page for the tag just pushed, with the changelog
-      # entry as its body.
-      - name: Create the GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.bump.outputs.version }}
-        run: |
-          gh release create "v${VERSION}" \
-            --title "v${VERSION}" \
-            --notes-file release-notes.md
-
-  # Build and publish the image for the version we just tagged.
   build:
-    needs: prepare
+    needs: plan
+    if: needs.plan.outputs.release == 'true' && inputs.dry-run != true
     uses: ./.github/workflows/build.yml
+    secrets: inherit # the optional Docker Hub credentials (see build.yml)
     permissions:
       contents: read
       packages: write
     with:
-      version: ${{ needs.prepare.outputs.version }}
+      version: ${{ needs.plan.outputs.version }}
+      ref: ${{ github.sha }}
+
+  verify:
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: The image is pullable without authentication (amd64 and arm64)
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY,,}"
+          token="$(curl -fsS "https://ghcr.io/token?scope=repository:${repo}:pull" | jq -r .token)"
+          if ! index="$(curl -fsS -H "Authorization: Bearer ${token}" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json' \
+            "https://ghcr.io/v2/${repo}/manifests/${VERSION}")"; then
+            echo "::error::ghcr.io/${repo}:${VERSION} cannot be pulled anonymously. Gladys pulls without credentials: make the package public (GitHub -> Packages -> ${repo#*/} -> Package settings -> Change visibility -> Public), then re-run this job."
+            exit 1
+          fi
+          platforms="$(jq -r '.manifests[].platform | "\(.os)/\(.architecture)"' <<<"$index")"
+          echo "$platforms"
+          for platform in linux/amd64 linux/arm64; do
+            if ! grep -qx "$platform" <<<"$platforms"; then
+              echo "::error::ghcr.io/${repo}:${VERSION} has no ${platform} image."
+              exit 1
+            fi
+          done
+
+      - name: The store validator passes, image check included
+        run: |
+          set -euo pipefail
+          node .github/scripts/release.mjs bump "$VERSION" "ghcr.io/${GITHUB_REPOSITORY,,}:${VERSION}"
+          npx --yes github:GladysAssistant/integration-store .
+
+      - name: The repository carries the store topic
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh api "repos/${GITHUB_REPOSITORY}" --jq '.topics[]' | grep -qx gladys-assistant-integration; then
+            echo "::error::The repository lacks the gladys-assistant-integration topic: the store will not index it (Settings -> About -> Topics)."
+            exit 1
+          fi
+
+  publish:
+    needs: [plan, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # the release commit and its tag
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Bump the version and write the changelog
+        run: |
+          set -euo pipefail
+          node .github/scripts/release.mjs bump "$VERSION" "ghcr.io/${GITHUB_REPOSITORY,,}:${VERSION}"
+          node .github/scripts/release.mjs changelog "$VERSION" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+
+      # Commit and tag pushed in ONE atomic push: both land or neither does.
+      # If main moved since this run started, the push is refused (no force):
+      # the run queued for that newer push releases everything.
+      - name: Commit, tag and push
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json gladys-assistant-integration.json CHANGELOG.md
+          git commit -m "chore(release): ${VERSION}"
+          git tag -a "v${VERSION}" -m "Release ${VERSION}"
+          git push --atomic origin "HEAD:refs/heads/main" "refs/tags/v${VERSION}"
+
+  github-release:
+    needs: publish
+    uses: ./.github/workflows/github-release.yml
+    permissions:
+      contents: write

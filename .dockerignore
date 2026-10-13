@@ -15,4 +15,3 @@ cover.jpg
 .prettierrc.json
 .prettierignore
 eslint.config.js
-changelog.config.mjs

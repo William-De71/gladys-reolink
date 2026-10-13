@@ -1,0 +1,26 @@
+# Dependabot: update pull requests, checked by the CI like any other. Their
+# titles (`chore(deps): …`) release nothing on their own; an SDK update that
+# matters to users is released with the next `feat` or `fix`.
+#
+# The Docker base image is left out on purpose: `node:24-alpine` is a moving
+# tag, pulled fresh by every release build, and moving to the next Node major
+# is a deliberate change (Dockerfile, CI matrix and `engines` together).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      dev-dependencies:
+        dependency-type: development
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci

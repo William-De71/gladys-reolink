@@ -1,0 +1,36 @@
+# -----------------------------------------------------------------------------
+# The pull request title becomes the commit of the squash merge, hence the
+# changelog line users read and the version bump (see release.yml). It must
+# follow Conventional Commits, in English, oriented towards the user:
+#
+#   feat(widgets): show the album of the track playing now
+#   fix: keep a Tornado Warning in force while the API is down
+#
+# No third-party action: a shell check on the title, read from the event.
+# -----------------------------------------------------------------------------
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  conventional-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types='feat|fix|perf|docs|chore|ci|test|style|refactor|build|revert'
+          if ! grep -qE "^(${types})(\([a-z0-9._-]+\))?!?: .{10,}$" <<<"$TITLE"; then
+            echo "::error::\"${TITLE}\" is not a Conventional Commits title: <type>(<scope>)?: <description of 10 characters or more>, type among ${types//|/, }."
+            exit 1
+          fi
+          if grep -qiE '[àâäçéèêëîïôöùûüÿœæ]' <<<"$TITLE"; then
+            echo "::error::Write the title in English: it becomes the changelog line."
+            exit 1
+          fi
+          echo "OK: ${TITLE}"
