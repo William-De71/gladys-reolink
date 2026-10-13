@@ -1,3 +1,20 @@
+# Changelog
+
+All notable changes to this integration are documented in this file. The format
+follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions
+follow [Semantic Versioning](https://semver.org/). This file is generated at
+each release from the Conventional Commits: do not edit it by hand.
+
+## [1.4.0] - 2026-10-13
+
+### Added
+
+- **devices:** show whether a battery or solar camera is charging ([29a3b6b](https://github.com/William-De71/gladys-reolink/commit/29a3b6be08885fbf573bf245a5e2d5eb64c8c75d))
+
+### Fixed
+
+- show the state of a camera as soon as it is added, and of its lights as soon as they are switched ([18d6607](https://github.com/William-De71/gladys-reolink/commit/18d6607cfa9b0a9021d69d2597aac43478292a07))
+
 ## [1.3.0](https://github.com/William-De71/gladys-reolink/compare/v1.2.0...v1.3.0) (2026-10-11)
 
 ### Features
@@ -34,3 +51,5 @@
 ### Bug Fixes
 
 * hold back the AI detections until Gladys can display them ([68a1d69](https://github.com/William-De71/gladys-reolink/commit/68a1d693911450472b55496c38585fd8019ed89e))
+
+[1.4.0]: https://github.com/William-De71/gladys-reolink/compare/v1.3.0...v1.4.0
