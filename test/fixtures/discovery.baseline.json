@@ -1,0 +1,353 @@
+{
+  "generated_from": "1.3.0",
+  "devices": {
+    "wiredPtz": {
+      "external_id": "ext:ext-dev-reolink:camera:95270005ZBCDEFGH",
+      "should_poll": true,
+      "poll_frequency": 60000,
+      "params": [
+        "REOLINK_IP",
+        "REOLINK_PORT",
+        "REOLINK_HTTPS",
+        "REOLINK_UID",
+        "REOLINK_MODEL",
+        "REOLINK_CAPABILITIES",
+        "REOLINK_CHANNEL",
+        "REOLINK_HOST_UID",
+        "CAMERA_URL",
+        "CAMERA_ROTATION",
+        "REOLINK_ONVIF_PORT",
+        "REOLINK_RTSP_DISABLED"
+      ],
+      "features": [
+        {
+          "external_id": "ext:ext-dev-reolink:camera:95270005ZBCDEFGH:image",
+          "category": "camera",
+          "type": "image",
+          "min": 0,
+          "max": 0,
+          "read_only": false,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:95270005ZBCDEFGH:motion",
+          "category": "motion-sensor",
+          "type": "binary",
+          "min": 0,
+          "max": 1,
+          "read_only": true,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:95270005ZBCDEFGH:ai-people",
+          "category": "motion-sensor",
+          "type": "binary",
+          "min": 0,
+          "max": 1,
+          "read_only": true,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:95270005ZBCDEFGH:ai-vehicle",
+          "category": "motion-sensor",
+          "type": "binary",
+          "min": 0,
+          "max": 1,
+          "read_only": true,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:95270005ZBCDEFGH:ai-animal",
+          "category": "motion-sensor",
+          "type": "binary",
+          "min": 0,
+          "max": 1,
+          "read_only": true,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:95270005ZBCDEFGH:floodlight",
+          "category": "light",
+          "type": "binary",
+          "min": 0,
+          "max": 1,
+          "read_only": false,
+          "has_feedback": true
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:95270005ZBCDEFGH:siren",
+          "category": "siren",
+          "type": "binary",
+          "min": 0,
+          "max": 1,
+          "read_only": false,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:95270005ZBCDEFGH:ir-lights",
+          "category": "switch",
+          "type": "binary",
+          "min": 0,
+          "max": 1,
+          "read_only": false,
+          "has_feedback": true
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:95270005ZBCDEFGH:ptz-move",
+          "category": "camera",
+          "type": "move",
+          "min": 0,
+          "max": 6,
+          "read_only": false,
+          "has_feedback": false,
+          "options": [1, 2, 3, 4, 5, 6]
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:95270005ZBCDEFGH:ptz-preset",
+          "category": "camera",
+          "type": "preset",
+          "min": 1,
+          "max": 3,
+          "read_only": false,
+          "has_feedback": false,
+          "options": [1, 3]
+        }
+      ]
+    },
+    "batteryDoorbell": {
+      "external_id": "ext:ext-dev-reolink:camera:9527000KN95C1JG7",
+      "should_poll": true,
+      "poll_frequency": 60000,
+      "params": [
+        "REOLINK_IP",
+        "REOLINK_PORT",
+        "REOLINK_HTTPS",
+        "REOLINK_UID",
+        "REOLINK_MODEL",
+        "REOLINK_CAPABILITIES",
+        "REOLINK_CHANNEL",
+        "REOLINK_HOST_UID",
+        "CAMERA_URL",
+        "CAMERA_ROTATION",
+        "REOLINK_ONVIF_PORT",
+        "REOLINK_RTSP_DISABLED"
+      ],
+      "features": [
+        {
+          "external_id": "ext:ext-dev-reolink:camera:9527000KN95C1JG7:image",
+          "category": "camera",
+          "type": "image",
+          "min": 0,
+          "max": 0,
+          "read_only": false,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:9527000KN95C1JG7:motion",
+          "category": "motion-sensor",
+          "type": "binary",
+          "min": 0,
+          "max": 1,
+          "read_only": true,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:9527000KN95C1JG7:doorbell",
+          "category": "doorbell",
+          "type": "ring",
+          "min": 0,
+          "max": 1,
+          "read_only": true,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:9527000KN95C1JG7:battery",
+          "category": "battery",
+          "type": "integer",
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "read_only": true,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:9527000KN95C1JG7:ai-people",
+          "category": "motion-sensor",
+          "type": "binary",
+          "min": 0,
+          "max": 1,
+          "read_only": true,
+          "has_feedback": false
+        }
+      ]
+    },
+    "hubChannel": {
+      "external_id": "ext:ext-dev-reolink:camera:9527000HUB00001A-ch3",
+      "should_poll": true,
+      "poll_frequency": 60000,
+      "params": [
+        "REOLINK_IP",
+        "REOLINK_PORT",
+        "REOLINK_HTTPS",
+        "REOLINK_UID",
+        "REOLINK_MODEL",
+        "REOLINK_CAPABILITIES",
+        "REOLINK_CHANNEL",
+        "REOLINK_HOST_UID",
+        "CAMERA_URL",
+        "CAMERA_ROTATION",
+        "REOLINK_ONVIF_PORT",
+        "REOLINK_RTSP_DISABLED"
+      ],
+      "features": [
+        {
+          "external_id": "ext:ext-dev-reolink:camera:9527000HUB00001A-ch3:image",
+          "category": "camera",
+          "type": "image",
+          "min": 0,
+          "max": 0,
+          "read_only": false,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:9527000HUB00001A-ch3:motion",
+          "category": "motion-sensor",
+          "type": "binary",
+          "min": 0,
+          "max": 1,
+          "read_only": true,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:9527000HUB00001A-ch3:ptz-move",
+          "category": "camera",
+          "type": "move",
+          "min": 0,
+          "max": 6,
+          "read_only": false,
+          "has_feedback": false,
+          "options": [1, 2, 3, 4, 5, 6]
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:9527000HUB00001A-ch3:ptz-preset",
+          "category": "camera",
+          "type": "preset",
+          "min": 2,
+          "max": 2,
+          "read_only": false,
+          "has_feedback": false,
+          "options": [2]
+        }
+      ]
+    },
+    "bare": {
+      "external_id": "ext:ext-dev-reolink:camera:EC71DB445566",
+      "should_poll": true,
+      "poll_frequency": 60000,
+      "params": [
+        "REOLINK_IP",
+        "REOLINK_PORT",
+        "REOLINK_HTTPS",
+        "REOLINK_UID",
+        "REOLINK_MODEL",
+        "REOLINK_CAPABILITIES",
+        "REOLINK_CHANNEL",
+        "REOLINK_HOST_UID",
+        "CAMERA_URL",
+        "CAMERA_ROTATION",
+        "REOLINK_ONVIF_PORT",
+        "REOLINK_RTSP_DISABLED"
+      ],
+      "features": [
+        {
+          "external_id": "ext:ext-dev-reolink:camera:EC71DB445566:image",
+          "category": "camera",
+          "type": "image",
+          "min": 0,
+          "max": 0,
+          "read_only": false,
+          "has_feedback": false
+        },
+        {
+          "external_id": "ext:ext-dev-reolink:camera:EC71DB445566:motion",
+          "category": "motion-sensor",
+          "type": "binary",
+          "min": 0,
+          "max": 1,
+          "read_only": true,
+          "has_feedback": false
+        }
+      ]
+    }
+  },
+  "manifest": {
+    "config_schema": [
+      {
+        "key": "intro",
+        "type": "section"
+      },
+      {
+        "key": "username",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "type": "secret"
+      },
+      {
+        "key": "stream_quality",
+        "type": "select",
+        "options": ["HD", "SD"]
+      },
+      {
+        "key": "advanced",
+        "type": "section"
+      },
+      {
+        "key": "camera_addresses",
+        "type": "string"
+      },
+      {
+        "key": "camera_accounts",
+        "type": "secret"
+      },
+      {
+        "key": "event_poll_interval",
+        "type": "number"
+      },
+      {
+        "key": "onvif_events",
+        "type": "boolean"
+      },
+      {
+        "key": "capture_timeout",
+        "type": "number"
+      },
+      {
+        "key": "image_refresh_interval",
+        "type": "number"
+      },
+      {
+        "key": "battery_section",
+        "type": "section"
+      },
+      {
+        "key": "battery_image_refresh_interval",
+        "type": "number"
+      },
+      {
+        "key": "battery_pause_refresh",
+        "type": "number"
+      },
+      {
+        "key": "battery_stop_all",
+        "type": "number"
+      },
+      {
+        "key": "battery_resume",
+        "type": "number"
+      }
+    ],
+    "actions": ["test_connection", "list_presets", "refresh_images"]
+  }
+}
