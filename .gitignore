@@ -1,10 +1,14 @@
 node_modules/
 npm-debug.log*
-.env
-.env.*
-data/
+coverage/
 *.log
 .DS_Store
+.env
+.env.*
 
-# Fichier temporaire produit par le workflow Release
+# Runtime volume of a local run. Anchored: a bare `data/` would also hide
+# src/data/.
+/data/
+
+# Temporary files of the Release workflow
 release-notes.md

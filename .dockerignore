@@ -1,10 +1,18 @@
-node_modules
-npm-debug.log*
-.git
-.github
+# Only package*.json, index.js, src/ and the manifest go into the image (see
+# the Dockerfile); everything else stays out of the build context.
+/node_modules
+/data
+/test
+/docs
+/.github
+/.git
+/.claude
 .env
 .env.*
-data
 *.log
-.DS_Store
-README.md
+*.md
+cover.jpg
+.prettierrc.json
+.prettierignore
+eslint.config.js
+changelog.config.mjs
