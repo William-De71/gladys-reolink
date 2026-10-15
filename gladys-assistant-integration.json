@@ -8,8 +8,8 @@
     "de": "Ihre Reolink-Kameras in Gladys: Bilder, sofortige Erkennungen, Licht, Sirene und PTZ.",
     "es": "Sus cámaras Reolink en Gladys: imágenes, detecciones instantáneas, foco, sirena y PTZ."
   },
-  "version": "1.4.0",
-  "docker_image": "ghcr.io/william-de71/gladys-reolink:1.4.0",
+  "version": "1.4.1",
+  "docker_image": "ghcr.io/william-de71/gladys-reolink:1.4.1",
   "gladys_version": ">=5.0.0",
   "cover_image": "https://raw.githubusercontent.com/William-De71/gladys-reolink/main/cover.jpg",
   "categories": ["security"],

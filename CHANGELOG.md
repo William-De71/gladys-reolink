@@ -5,6 +5,12 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions
 follow [Semantic Versioning](https://semver.org/). This file is generated at
 each release from the Conventional Commits: do not edit it by hand.
 
+## [1.4.1] - 2026-10-15
+
+### Fixed
+
+- **discovery:** explain why a camera is not found when its HTTP API is off ([299082d](https://github.com/William-De71/gladys-reolink/commit/299082d995dbffe724cb15dc53911411fbfb694c))
+
 ## [1.4.0] - 2026-10-13
 
 ### Added
@@ -52,4 +58,5 @@ each release from the Conventional Commits: do not edit it by hand.
 
 * hold back the AI detections until Gladys can display them ([68a1d69](https://github.com/William-De71/gladys-reolink/commit/68a1d693911450472b55496c38585fd8019ed89e))
 
+[1.4.1]: https://github.com/William-De71/gladys-reolink/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/William-De71/gladys-reolink/compare/v1.3.0...v1.4.0
