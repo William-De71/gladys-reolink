@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import http from 'node:http';
 import assert from 'node:assert/strict';
 import {
   platformIdOf,
@@ -11,6 +12,8 @@ import {
   isUsableIdentity,
   dedupePlatformIds,
   channelPlatformId,
+  resolveCameras,
+  newDiscoveryReport,
 } from '../src/devices.js';
 import { normalizeConfig } from '../src/config.js';
 import { buildRtspUrl } from '../src/reolink/rtsp.js';
@@ -415,4 +418,32 @@ test('the RTSP url of a camera behind a hub names its own channel', () => {
   // thing separating their streams.
   const other = buildRtspUrl(camera({ channel: 0 }), { username: 'admin', password: 'secret' });
   assert.match(other, /Preview_01_main$/);
+});
+
+/**
+ * A loopback port nothing listens on: what a camera with its HTTP server turned
+ * off looks like from Gladys.
+ * @returns {Promise<number>} The port.
+ */
+async function closedPort() {
+  const server = http.createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
+
+test('resolveCameras reports a camera whose API does not answer', async () => {
+  // The forum case: a camera streaming over RTSP, typed in by address, with its
+  // HTTP server off. It used to vanish behind a debug line; the user must be
+  // told which switch to turn on.
+  const config = normalizeConfig({ username: 'admin', password: 'secret' });
+  const report = newDiscoveryReport();
+  const port = await closedPort();
+
+  const cameras = await resolveCameras({ ip: '127.0.0.1', port, manual: true }, config, report);
+
+  assert.deepEqual(cameras, []);
+  assert.deepEqual(report.unreachable, ['127.0.0.1']);
+  assert.deepEqual(report.authRefused, []);
 });

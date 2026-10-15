@@ -84,6 +84,27 @@ export function testOk(count, details) {
 }
 
 /**
+ * Build the message for cameras that exist but keep their API closed.
+ *
+ * Its own message rather than "no camera found": the camera is right there,
+ * often already streaming over RTSP, and what is missing is one switch in the
+ * Reolink app that the user would otherwise never think of.
+ * @param {string[]} addresses - The addresses that did not answer.
+ * @returns {object} The multi-language message.
+ * @example
+ * apiUnreachable(['192.168.1.42']);
+ */
+export function apiUnreachable(addresses) {
+  const list = addresses.join(', ');
+  return {
+    en: `No answer from ${list}. Check the address, then in the Reolink app enable HTTP or HTTPS (Settings → Network → Advanced → Server settings): RTSP alone is not enough.`,
+    fr: `Aucune réponse de ${list}. Vérifiez l'adresse, puis dans l'application Reolink activez HTTP ou HTTPS (Paramètres → Réseau → Avancé → Paramètres du serveur) : RTSP seul ne suffit pas.`,
+    de: `Keine Antwort von ${list}. Prüfen Sie die Adresse und aktivieren Sie dann in der Reolink-App HTTP oder HTTPS (Einstellungen → Netzwerk → Erweitert → Servereinstellungen): RTSP allein reicht nicht.`,
+    es: `Sin respuesta de ${list}. Compruebe la dirección y, en la aplicación Reolink, active HTTP o HTTPS (Ajustes → Red → Avanzado → Ajustes del servidor): RTSP por sí solo no basta.`,
+  };
+}
+
+/**
  * Build the result of a failed connection test.
  * @param {string} reason - The technical reason, left untranslated.
  * @returns {object} The multi-language message.

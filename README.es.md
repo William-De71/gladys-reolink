@@ -130,8 +130,9 @@ Desde Gladys (5.0.0 o posterior): **Integraciones → tienda → Reolink → Ins
 contraseña de las cámaras, pulse **Probar la conexión**, luego **Descubrir → Buscar** y añada las cámaras. Consulte la
 [documentación de usuario](docs/es.md).
 
-En las cámaras, active **RTSP** (vídeo en directo) y **ONVIF** (detecciones instantáneas) en la aplicación Reolink:
-Ajustes → Red → Avanzado → Configuración del servidor. Los firmwares recientes los traen desactivados.
+En las cámaras, active **HTTP** o **HTTPS** (imprescindible), **RTSP** (vídeo en directo) y **ONVIF** (detecciones
+instantáneas) en la aplicación Reolink: Ajustes → Red → Avanzado → Configuración del servidor. Los firmwares recientes
+los traen desactivados.
 
 Imagen Docker: `ghcr.io/william-de71/gladys-reolink`, multiarquitectura (amd64/arm64), sin root, sistema de archivos
 de solo lectura, etiquetas OCI. Incluye `ffmpeg`, que solo sirve para reducir una instantánea demasiado grande.

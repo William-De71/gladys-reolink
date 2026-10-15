@@ -576,13 +576,19 @@ export async function resolveChannel(
  *
  * One address may yield SEVERAL cameras: a Home Hub or an NVR fronts one camera
  * per channel, all sharing this address, port and session.
- * @param {object} candidate - `{ ip, port, uid, mac, name }`.
+ *
+ * Tolerant does not mean silent, though. An address the user typed, or one that
+ * answered the Reolink broadcast, IS a camera: when it stays mute the user needs
+ * to hear why, and the reason is recorded in `report` for the caller to show.
+ * @param {object} candidate - `{ ip, port, uid, mac, name, manual }`.
  * @param {object} config - The normalized configuration.
+ * @param {object} [report] - Collects the addresses that failed, by reason
+ * (see `newDiscoveryReport`).
  * @returns {Promise<object[]>} The resolved cameras, possibly empty.
  * @example
  * const cameras = await resolveCameras({ ip: '192.168.1.42' }, config);
  */
-export async function resolveCameras(candidate, config) {
+export async function resolveCameras(candidate, config, report = newDiscoveryReport()) {
   const account = resolveAccount(config, candidate.ip);
   const api = new ReolinkApi({
     ip: candidate.ip,
@@ -595,7 +601,12 @@ export async function resolveCameras(candidate, config) {
   try {
     const devInfo = await api.getDevInfo();
     if (!devInfo) {
-      logger.debug(`${candidate.ip} answered, but not like a Reolink camera`);
+      const message = `${candidate.ip} answered, but not like a Reolink camera`;
+      if (candidate.manual) {
+        logger.warn(message);
+      } else {
+        logger.debug(message);
+      }
       return [];
     }
 
@@ -629,6 +640,19 @@ export async function resolveCameras(candidate, config) {
       logger.warn(
         `${candidate.ip} refused the credentials. Check the username and password, or add a specific account for this camera.`,
       );
+      report.authRefused.push(candidate.ip);
+    } else if (String(e.message).startsWith('REOLINK_UNREACHABLE')) {
+      // The usual cause on recent firmwares: the HTTP and HTTPS servers ship
+      // disabled, and enabling RTSP alone (enough for a plain RTSP camera in
+      // Gladys) leaves the API this integration relies on closed.
+      const ports = candidate.port ? `port ${candidate.port}` : 'the HTTP (80) or HTTPS (443) port';
+      logger.warn(
+        `${candidate.ip} did not answer on ${ports} (${e.message}). Check the address, and enable HTTP or HTTPS in the Reolink app (Settings → Network → Advanced → Server settings): RTSP alone is not enough.`,
+      );
+      report.unreachable.push(candidate.ip);
+    } else if (candidate.manual) {
+      // Typed by the user, so a failure is news to them, whatever its cause.
+      logger.warn(`${candidate.ip} could not be identified as a Reolink camera: ${e.message}`);
     } else {
       logger.debug(`${candidate.ip} could not be identified: ${e.message}`);
     }
@@ -636,6 +660,20 @@ export async function resolveCameras(candidate, config) {
   } finally {
     await api.logout().catch(() => {});
   }
+}
+
+/**
+ * Start an empty record of the addresses discovery could not use.
+ *
+ * Kept apart from the devices because nothing about it is published: it is what
+ * lets the connection test and the integration status say WHY a camera is
+ * missing, instead of a generic "no camera found".
+ * @returns {{ unreachable: string[], authRefused: string[] }} The empty report.
+ * @example
+ * const report = newDiscoveryReport();
+ */
+export function newDiscoveryReport() {
+  return { unreachable: [], authRefused: [] };
 }
 
 /**
@@ -648,11 +686,13 @@ export async function resolveCameras(candidate, config) {
  * path did not suit.
  * @param {object} gladys - The SDK instance.
  * @param {object} config - The normalized configuration.
+ * @param {object} [report] - Filled with the addresses that failed (see
+ * `newDiscoveryReport`).
  * @returns {Promise<object[]>} The devices.
  * @example
  * const devices = await buildDiscoveredDevices(gladys, config);
  */
-export async function buildDiscoveredDevices(gladys, config) {
+export async function buildDiscoveredDevices(gladys, config, report = newDiscoveryReport()) {
   const discovered = await discoverCameras(gladys);
 
   /** @type {Map<string, object>} */
@@ -661,14 +701,19 @@ export async function buildDiscoveredDevices(gladys, config) {
   // Added last so a manual entry overwrites the discovered one for that address:
   // it may carry a port the scan could not know about.
   config.camera_addresses.forEach((entry) => {
-    candidates.set(entry.ip, { ...candidates.get(entry.ip), ip: entry.ip, port: entry.port });
+    candidates.set(entry.ip, {
+      ...candidates.get(entry.ip),
+      ip: entry.ip,
+      port: entry.port,
+      manual: true,
+    });
   });
 
   // Identifying is I/O bound and independent per ADDRESS, so resolve them
   // together rather than paying the timeout of each unreachable one in turn.
   // One address may yield several cameras when a Home Hub or an NVR fronts them.
   const perAddress = await Promise.all(
-    [...candidates.values()].map((candidate) => resolveCameras(candidate, config)),
+    [...candidates.values()].map((candidate) => resolveCameras(candidate, config, report)),
   );
 
   const resolved = dedupePlatformIds(perAddress.flat().filter((camera) => camera !== null));

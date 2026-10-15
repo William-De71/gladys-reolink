@@ -25,6 +25,7 @@ Eso es todo. No hay que crear ninguna cuenta ni solicitar ninguna clave de API.
 
 Los firmwares recientes de Reolink se entregan con algunos servicios de red **desactivados**. En la aplicación Reolink, abra **Ajustes → Red → Avanzado → Ajustes del servidor** (el nombre varía ligeramente según la versión de la aplicación) y active:
 
+- **HTTP** (o **HTTPS**) — imprescindible: es la vía por la que Gladys se comunica con la cámara. Sin él, la cámara nunca se encuentra, aunque su flujo RTSP funcione en otro sitio;
 - **RTSP** — necesario para el vídeo en directo;
 - **ONVIF** — necesario para las detecciones instantáneas (ver más abajo).
 

@@ -25,6 +25,7 @@ That is all. There is no account to create and no API key to request.
 
 Recent Reolink firmwares ship with some network services turned **off**. In the Reolink app, open **Settings → Network → Advanced → Server settings** (the wording varies slightly between app versions) and enable:
 
+- **HTTP** (or **HTTPS**) — needed for everything: it is how Gladys talks to the camera. Without it the camera is never found, even when its RTSP stream works elsewhere;
 - **RTSP** — needed for the live video;
 - **ONVIF** — needed for instant detections (see below).
 

@@ -21,6 +21,7 @@ import { GladysIntegration, logger } from '@gladysassistant/integration-sdk';
 import { normalizeConfig, isConfigured } from './src/config.js';
 import {
   buildDiscoveredDevices,
+  newDiscoveryReport,
   deviceHasCapability,
   getParam,
   cameraIds,
@@ -45,6 +46,7 @@ import {
   CAMERA_NOTES,
   testOk,
   testFailed,
+  apiUnreachable,
   presetList,
   refreshResult,
 } from './src/messages.js';
@@ -326,6 +328,28 @@ const watcher = new EventWatcher({
 });
 
 /**
+ * Say why no camera came out of a discovery round.
+ *
+ * A camera that answered but refused the password, or one that is there but
+ * keeps its API closed, each have a precise fix; only when nothing at all
+ * answered is the generic message the honest one.
+ * @param {object} report - What discovery recorded (see `newDiscoveryReport`).
+ * @param {object} [fallback] - The message when nothing more precise applies.
+ * @returns {object} The multi-language message.
+ * @example
+ * noCameraMessage(report);
+ */
+function noCameraMessage(report, fallback = MESSAGES.noCameraFound) {
+  if (report.authRefused.length > 0) {
+    return MESSAGES.testAuthRefused;
+  }
+  if (report.unreachable.length > 0) {
+    return apiUnreachable(report.unreachable);
+  }
+  return fallback;
+}
+
+/**
  * Refresh the configuration, find the cameras and publish them.
  * @returns {Promise<object[]>} The published devices.
  * @example
@@ -339,7 +363,8 @@ async function publishDevices() {
     return [];
   }
 
-  const devices = await buildDiscoveredDevices(gladys, config);
+  const report = newDiscoveryReport();
+  const devices = await buildDiscoveredDevices(gladys, config, report);
   await gladys.publishDiscoveredDevices(devices);
 
   // Declare the battery models to the guard right away. It must know a camera
@@ -353,7 +378,7 @@ async function publishDevices() {
   if (devices.length > 0) {
     await gladys.setConnectionStatus(true).catch(() => {});
   } else {
-    await gladys.setConnectionStatus(false, MESSAGES.noCameraFound).catch(() => {});
+    await gladys.setConnectionStatus(false, noCameraMessage(report)).catch(() => {});
   }
   return devices;
 }
@@ -605,9 +630,10 @@ gladys.onAction('test_connection', async () => {
       return MESSAGES.testNotConfigured;
     }
 
-    const devices = await buildDiscoveredDevices(gladys, config);
+    const report = newDiscoveryReport();
+    const devices = await buildDiscoveredDevices(gladys, config, report);
     if (devices.length === 0) {
-      return MESSAGES.testNoAnswer;
+      return noCameraMessage(report, MESSAGES.testNoAnswer);
     }
 
     // Report what each camera can do and how it is watched: it is what decides

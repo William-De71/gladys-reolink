@@ -25,6 +25,7 @@ Das ist alles. Es muss weder ein Konto angelegt noch ein API-Schlüssel beantrag
 
 Neuere Reolink-Firmwares werden mit einigen Netzwerkdiensten **deaktiviert** ausgeliefert. Öffnen Sie in der Reolink-App **Einstellungen → Netzwerk → Erweitert → Servereinstellungen** (die Bezeichnung variiert je nach App-Version leicht) und aktivieren Sie:
 
+- **HTTP** (oder **HTTPS**) — unverzichtbar: Darüber spricht Gladys mit der Kamera. Ohne es wird die Kamera nie gefunden, selbst wenn ihr RTSP-Stream anderswo funktioniert;
 - **RTSP** — für das Live-Video;
 - **ONVIF** — für sofortige Erkennungen (siehe unten).
 

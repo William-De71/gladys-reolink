@@ -130,8 +130,9 @@ In Gladys (5.0.0 oder neuer): **Integrationen → Store → Reolink → Installi
 Kameras eingeben, auf **Verbindung testen** klicken, dann **Entdecken → Suchen** und die Kameras hinzufügen. Siehe die
 [Benutzerdokumentation](docs/de.md).
 
-Aktivieren Sie auf den Kameras in der Reolink-App **RTSP** (Live-Video) und **ONVIF** (sofortige Erkennungen):
-Einstellungen → Netzwerk → Erweitert → Servereinstellungen. Neuere Firmwares liefern beides deaktiviert aus.
+Aktivieren Sie auf den Kameras in der Reolink-App **HTTP** oder **HTTPS** (unverzichtbar), **RTSP** (Live-Video) und
+**ONVIF** (sofortige Erkennungen): Einstellungen → Netzwerk → Erweitert → Servereinstellungen. Neuere Firmwares liefern
+sie deaktiviert aus.
 
 Docker-Image: `ghcr.io/william-de71/gladys-reolink`, Multi-Arch (amd64/arm64), ohne Root-Rechte, schreibgeschütztes
 Dateisystem, OCI-Labels. Es enthält `ffmpeg`, das nur ein zu großes Schnappschussbild verkleinert.

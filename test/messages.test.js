@@ -5,6 +5,7 @@ import {
   CAMERA_NOTES,
   testOk,
   testFailed,
+  apiUnreachable,
   presetList,
   refreshResult,
 } from '../src/messages.js';
@@ -29,6 +30,7 @@ test('every user-facing message exists in the four languages of Gladys', () => {
   }
   assertTranslated('testOk', testOk(1, { en: 'a', fr: 'a', de: 'a', es: 'a' }));
   assertTranslated('testFailed', testFailed('REOLINK_TIMEOUT'));
+  assertTranslated('apiUnreachable', apiUnreachable(['192.168.1.42']));
   assertTranslated('refreshResult', refreshResult(1, []));
   assertTranslated('refreshResult', refreshResult(1, ['Garage']));
   assertTranslated('presetList', presetList([{ name: 'Gate', presets: [] }]));
@@ -41,4 +43,12 @@ test('the preset list names each preset with its number', () => {
   ]);
   assert.equal(message.en, 'Saved presets — Gate: 2 = Door | Yard: unreadable (REOLINK_TIMEOUT)');
   assert.match(message.de, /^Gespeicherte Positionen — Gate: 2 = Door/);
+});
+
+test('the unreachable message names the addresses and the switch to turn on', () => {
+  const message = apiUnreachable(['192.168.1.42', '192.168.1.43']);
+  for (const language of LANGUAGES) {
+    assert.match(message[language], /192\.168\.1\.42, 192\.168\.1\.43/);
+    assert.match(message[language], /HTTPS/);
+  }
 });

@@ -127,8 +127,8 @@ From Gladys (5.0.0 or later): **Integrations → store → Reolink → Install**
 cameras, click **Test the connection**, then **Discover → Scan** and add the cameras. See the
 [user documentation](docs/en.md).
 
-On the cameras, enable **RTSP** (live video) and **ONVIF** (instant detections) in the Reolink app: Settings →
-Network → Advanced → Server settings. Recent firmwares ship with both turned off.
+On the cameras, enable **HTTP** or **HTTPS** (required), **RTSP** (live video) and **ONVIF** (instant detections) in
+the Reolink app: Settings → Network → Advanced → Server settings. Recent firmwares ship with them turned off.
 
 Docker image: `ghcr.io/william-de71/gladys-reolink`, multi-arch (amd64/arm64), non-root, read-only rootfs, OCI
 labels. It ships `ffmpeg`, used only to shrink an oversized snapshot.

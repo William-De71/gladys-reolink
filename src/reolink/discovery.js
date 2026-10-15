@@ -65,11 +65,32 @@ export function parseDiscoveryReply(payload) {
 }
 
 /**
+ * The devices found by the last scan that went through.
+ *
+ * Gladys allows one active scan per 10 seconds per integration, and two rounds
+ * often land closer than that — a configuration saved twice, a scan requested
+ * right after saving. The cameras have not moved in those few seconds, so the
+ * previous answer is the right one to give, where an empty list would make the
+ * cameras found by broadcast vanish from the Discovery screen.
+ * @type {object[]}
+ */
+let lastFound = [];
+
+/**
+ * Forget the last scan, so a test starts from a clean slate.
+ * @example
+ * resetDiscoveryCache();
+ */
+export function resetDiscoveryCache() {
+  lastFound = [];
+}
+
+/**
  * Discover the Reolink devices present on the network.
  *
  * Failures are swallowed on purpose: discovery is a convenience over the manual
- * address list, so a filtered broadcast or a rate-limited scan must degrade to
- * "nothing found", never break the whole publish.
+ * address list, so a filtered broadcast must degrade to "nothing found", and a
+ * rate-limited scan to the previous answer — never break the whole publish.
  * @param {object} gladys - The SDK instance.
  * @returns {Promise<object[]>} One entry per device: `{ ip, uid, mac, name }`.
  * @example
@@ -88,6 +109,12 @@ export async function discoverCameras(gladys) {
     // `network_discovery` — the integration was installed before the field was
     // declared. Reinstalling it is the fix, and staying silent here would hide
     // the reason why no camera is ever found.
+    if (e.status === 429) {
+      logger.debug(
+        `A network scan ran a few seconds ago: reusing its ${lastFound.length} device(s)`,
+      );
+      return lastFound;
+    }
     if (e.status === 403) {
       logger.warn(
         'Gladys refused the network scan: the installed integration predates its "network_discovery" declaration. Reinstall the integration to pick up the new manifest.',
@@ -120,6 +147,7 @@ export async function discoverCameras(gladys) {
   });
 
   const found = [...cameras.values()];
+  lastFound = found;
   if (found.length > 0) {
     logger.info(`${found.length} Reolink device(s) located on the local network`);
   } else {

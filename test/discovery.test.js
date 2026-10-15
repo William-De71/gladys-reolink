@@ -4,6 +4,7 @@ import {
   buildDiscoveryRequest,
   parseDiscoveryReply,
   discoverCameras,
+  resetDiscoveryCache,
 } from '../src/reolink/discovery.js';
 import { fakeGladys } from './helpers/fakeGladys.js';
 
@@ -116,4 +117,40 @@ test('discoverCameras ignores a reply carrying no usable address', async () => {
     scanResults: [{ source_ip: '', payload_base64: Buffer.from('nothing').toString('base64') }],
   });
   assert.deepEqual(await discoverCameras(gladys), []);
+});
+
+test('discoverCameras reuses the previous answer when Gladys rate-limits the scan', async () => {
+  // Gladys allows one active scan per 10 s: a configuration saved twice in a row
+  // must not make the cameras found a moment ago vanish from Discovery.
+  resetDiscoveryCache();
+  const tooMany = new Error('Too Many Requests');
+  tooMany.status = 429;
+  const replies = [
+    {
+      source_ip: '192.168.1.42',
+      payload_base64: Buffer.from(JSON.stringify({ uid: 'UID1234567890ABC' })).toString('base64'),
+    },
+  ];
+  let calls = 0;
+  const gladys = {
+    async scanNetwork() {
+      calls += 1;
+      if (calls > 1) {
+        throw tooMany;
+      }
+      return replies;
+    },
+  };
+
+  const first = await discoverCameras(gladys);
+  const second = await discoverCameras(gladys);
+  assert.equal(first.length, 1);
+  assert.deepEqual(second, first);
+});
+
+test('discoverCameras finds nothing on a rate-limited first scan', async () => {
+  resetDiscoveryCache();
+  const tooMany = new Error('Too Many Requests');
+  tooMany.status = 429;
+  assert.deepEqual(await discoverCameras(fakeGladys({ scanError: tooMany })), []);
 });
