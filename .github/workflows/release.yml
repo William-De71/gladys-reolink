@@ -83,6 +83,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24
+          # Never the runner's cached Node: it can predate a security release.
+          check-latest: true
 
       - name: Compute the next version
         id: plan
@@ -147,6 +149,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24
+          # Never the runner's cached Node: it can predate a security release.
+          check-latest: true
 
       - name: The image is pullable without authentication (amd64 and arm64)
         run: |
@@ -201,6 +205,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24
+          # Never the runner's cached Node: it can predate a security release.
+          check-latest: true
 
       - name: Bump the version and write the changelog
         run: |
