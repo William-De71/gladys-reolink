@@ -1,6 +1,6 @@
 {
   "name": "gladys-reolink",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "description": "External integration to use your Reolink cameras from Gladys Assistant.",
   "homepage": "https://github.com/William-De71/gladys-reolink",
