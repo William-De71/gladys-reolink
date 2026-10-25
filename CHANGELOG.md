@@ -5,6 +5,12 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions
 follow [Semantic Versioning](https://semver.org/). This file is generated at
 each release from the Conventional Commits: do not edit it by hand.
 
+## [1.5.0] - 2026-10-25
+
+### Added
+
+- require Gladys 5.3 and declare catalog keywords ([0a912ff](https://github.com/William-De71/gladys-reolink/commit/0a912fff9b60f63d142e029f303c53c2c91a6bb2))
+
 ## [1.4.2] - 2026-10-24
 
 ### Security
@@ -64,6 +70,7 @@ each release from the Conventional Commits: do not edit it by hand.
 
 * hold back the AI detections until Gladys can display them ([68a1d69](https://github.com/William-De71/gladys-reolink/commit/68a1d693911450472b55496c38585fd8019ed89e))
 
+[1.5.0]: https://github.com/William-De71/gladys-reolink/compare/v1.4.2...v1.5.0
 [1.4.2]: https://github.com/William-De71/gladys-reolink/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/William-De71/gladys-reolink/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/William-De71/gladys-reolink/compare/v1.3.0...v1.4.0
