@@ -8,7 +8,7 @@ Alles läuft **in Ihrem lokalen Netzwerk**. Ein Reolink-Konto ist nicht nötig, 
 
 - Eine oder mehrere Reolink-Kameras im selben Netzwerk wie Gladys — eigenständig oder mit einem **Home Hub** oder einem **NVR** gekoppelt.
 - Den Benutzernamen und das Passwort, mit denen Sie sich an diesen Kameras anmelden (die aus der Reolink-App, meist `admin`).
-- Gladys 5.0.0 oder neuer.
+- Gladys 5.3.0 oder neuer.
 
 Das ist alles. Es muss weder ein Konto angelegt noch ein API-Schlüssel beantragt werden.
 

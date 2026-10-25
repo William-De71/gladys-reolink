@@ -5,7 +5,7 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/William-De71/gladys-reolink?sort=semver)](https://github.com/William-De71/gladys-reolink/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/William-De71/gladys-reolink/release.yml?branch=main&label=CI)](https://github.com/William-De71/gladys-reolink/actions/workflows/release.yml)
-[![Gladys](https://img.shields.io/badge/Gladys-%E2%89%A5%205.0.0-2f6fb5)](https://gladysassistant.com)
+[![Gladys](https://img.shields.io/badge/Gladys-%E2%89%A5%205.3.0-2f6fb5)](https://gladysassistant.com)
 
 ![Reolink for Gladys Assistant](cover.jpg)
 
@@ -123,7 +123,7 @@ camera **UID**, then its MAC, then its address: it survives a rename and a DHCP 
 
 ## Installation
 
-From Gladys (5.0.0 or later): **Integrations → store → Reolink → Install**. Fill in the username and password of the
+From Gladys (5.3.0 or later): **Integrations → store → Reolink → Install**. Fill in the username and password of the
 cameras, click **Test the connection**, then **Discover → Scan** and add the cameras. See the
 [user documentation](docs/en.md).
 
@@ -225,7 +225,7 @@ camera's own low-resolution stream. Layout: see [CLAUDE.md](CLAUDE.md).
 - `test/i18n.test.js` checks the four languages of the manifest, the messages, the docs and the READMEs.
 - `test/release.test.js` covers the release script (versions, changelog, bump).
 
-Requirements: Gladys `>= 5.0.0` (the `battery` / `charging` feature), Node.js `>= 22.20`.
+Requirements: Gladys `>= 5.0.0` (the `battery` / `charging` feature; catalog keywords and countries of Gladys 5.3), Node.js `>= 22.20`.
 
 ## Release and commit convention
 

@@ -214,3 +214,17 @@ test('the minimum Gladys version covers the battery charging feature', () => {
   const [major] = manifest.gladys_version.replace(/^>=/, '').split('.').map(Number);
   assert.ok(major >= 5, manifest.gladys_version);
 });
+
+test('catalog keywords, worldwide (Gladys 5.3.0)', () => {
+  assert.equal(manifest.gladys_version, '>=5.3.0');
+  const { keywords } = manifest;
+  assert.ok(Array.isArray(keywords) && keywords.length >= 1 && keywords.length <= 10);
+  for (const keyword of keywords) {
+    assert.ok(keyword.trim().length >= 2 && keyword.trim().length <= 30, keyword);
+  }
+  const normalized = keywords.map((keyword) => keyword.trim().toLowerCase());
+  assert.equal(new Set(normalized).size, normalized.length);
+  assert.ok(!normalized.includes(manifest.name.toLowerCase()));
+  // Reolink cameras are sold worldwide and talk on the LAN only.
+  assert.equal(manifest.countries, undefined);
+});

@@ -5,7 +5,7 @@
 [![Licence : Apache-2.0](https://img.shields.io/badge/licence-Apache--2.0-blue.svg)](LICENSE)
 [![Dernière version](https://img.shields.io/github/v/release/William-De71/gladys-reolink?sort=semver)](https://github.com/William-De71/gladys-reolink/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/William-De71/gladys-reolink/release.yml?branch=main&label=CI)](https://github.com/William-De71/gladys-reolink/actions/workflows/release.yml)
-[![Gladys](https://img.shields.io/badge/Gladys-%E2%89%A5%205.0.0-2f6fb5)](https://gladysassistant.com)
+[![Gladys](https://img.shields.io/badge/Gladys-%E2%89%A5%205.3.0-2f6fb5)](https://gladysassistant.com)
 
 ![Reolink pour Gladys Assistant](cover.jpg)
 
@@ -126,7 +126,7 @@ renommage et à un changement de bail DHCP.
 
 ## Installation
 
-Depuis Gladys (5.0.0 ou plus récent) : **Intégrations → store → Reolink → Installer**. Renseignez l'identifiant et le
+Depuis Gladys (5.3.0 ou plus récent) : **Intégrations → store → Reolink → Installer**. Renseignez l'identifiant et le
 mot de passe des caméras, cliquez sur **Tester la connexion**, puis **Découverte → Scanner** et ajoutez les caméras.
 Voir la [documentation utilisateur](docs/fr.md).
 
@@ -231,7 +231,7 @@ sur le flux basse résolution de la caméra. Organisation du code : voir [CLAUDE
 - `test/i18n.test.js` vérifie les quatre langues du manifeste, des messages, des docs et des README.
 - `test/release.test.js` couvre le script de release (versions, changelog, mise à jour des versions).
 
-Prérequis : Gladys `>= 5.0.0` (la fonctionnalité `battery` / `charging`), Node.js `>= 22.20`.
+Prérequis : Gladys `>= 5.0.0` (la fonctionnalité `battery` / `charging` ; mots-clés et pays du catalogue de Gladys 5.3), Node.js `>= 22.20`.
 
 ## Release et convention de commits
 

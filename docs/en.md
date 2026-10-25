@@ -8,7 +8,7 @@ Everything happens **on your local network**. No Reolink account is needed, and 
 
 - One or more Reolink cameras on the same network as Gladys — standalone, or paired with a **Home Hub** or an **NVR**.
 - The username and password you use to log into those cameras (the ones from the Reolink app, usually `admin`).
-- Gladys 5.0.0 or later.
+- Gladys 5.3.0 or later.
 
 That is all. There is no account to create and no API key to request.
 
