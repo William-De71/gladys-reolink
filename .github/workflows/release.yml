@@ -24,10 +24,16 @@
 # version (e.g. 1.0.0), `dry-run` only prints the version and the notes in the
 # job summary, publishing nothing.
 #
-# The release commit is pushed with GITHUB_TOKEN, which triggers no workflow:
-# it cannot start another release (the `if` below guards it anyway). A
-# protected main rejects that push: allow GitHub Actions to bypass the rule
-# (ruleset bypass list), or push through a GitHub App token — never a PAT.
+# Protected main and v* tags: the rulesets only let the maintainer and deploy
+# keys through (GitHub Actions cannot be a bypass actor on a personal
+# repository). The release commit and its tag are therefore pushed with the
+# deploy key of the `release` environment (secret RELEASE_DEPLOY_KEY), and that
+# environment only accepts main: a run from another branch never gets the key.
+#
+# A push made with a deploy key starts other workflows (unlike GITHUB_TOKEN):
+# build.yml and github-release.yml do not listen to tags, they are only called
+# from here (or run by hand); the release commit starts this workflow again,
+# and the `if` below skips it.
 # -----------------------------------------------------------------------------
 name: Release
 
@@ -190,8 +196,9 @@ jobs:
   publish:
     needs: [plan, verify]
     runs-on: ubuntu-latest
+    environment: release # the deploy key that pushes the commit and the tag
     permissions:
-      contents: write # the release commit and its tag
+      contents: read # the push goes through the deploy key
     env:
       VERSION: ${{ needs.plan.outputs.version }}
     steps:
@@ -200,6 +207,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7

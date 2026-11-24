@@ -6,18 +6,23 @@
 #   - called by the Release workflow (workflow_call) with the version it is
 #     releasing: the manifest and package.json inside the image are bumped to
 #     it first, then `:<version>` and `:latest` are pushed;
-#   - a `vX.Y.Z` tag pushed by hand -> release build of that tag;
-#   - a manual run (workflow_dispatch) on any branch -> test build, tagged
+#   - a manual run (workflow_dispatch) with `version` -> release build of the
+#     ref it runs on (run it on the tag vX.Y.Z), `:<version>` + `:latest`;
+#   - a manual run without `version` on any branch -> test build, tagged
 #     with the branch name (or `image-tag`), never `latest`.
+#
+# No `push: tags` trigger: the Release workflow pushes its tag with a deploy
+# key, which would start this workflow again for an image already built.
 # -----------------------------------------------------------------------------
 name: Build and publish image
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Release build of this version, e.g. 1.2.0 (run it on the tag v1.2.0); empty = test image'
+        required: false
+        default: ''
       image-tag:
         description: 'Image tag to publish (defaults to the branch name)'
         required: false
@@ -69,11 +74,15 @@ jobs:
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
           # A release build is told by the `version` input, not the event name:
           # inside a called workflow, GITHUB_EVENT_NAME is the caller's event.
+          if [ -n "$INPUT_VERSION" ] && [ -n "$INPUT_IMAGE_TAG" ]; then
+            echo "::error::Give either version (a release) or image-tag (a test image), not both."
+            exit 1
+          fi
           if [ -n "$INPUT_VERSION" ]; then
             version="$INPUT_VERSION"
             tags="${image}:${version},${image}:latest"
             release=true
-          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+          else
             version="${INPUT_IMAGE_TAG:-${GITHUB_REF_NAME//\//-}}"
             if [ "$version" = "latest" ]; then
               echo "::error::Cannot use 'latest' as a manual image tag."
@@ -81,14 +90,10 @@ jobs:
             fi
             tags="${image}:${version}"
             release=false
-          else
-            version="${GITHUB_REF_NAME#v}"
-            tags="${image}:${version},${image}:latest"
-            release=true
           fi
           if [ "$release" = "true" ]; then
             # The files inside the image announce the version being released
-            # (a no-op on a hand-pushed tag, already bumped).
+            # (a no-op on a release tag, already bumped).
             node .github/scripts/release.mjs bump "$version" "${image}:${version}"
           fi
           # The manifest as an image label, with `docker_image` pointing at the

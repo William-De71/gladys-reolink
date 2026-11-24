@@ -5,16 +5,14 @@
 # releases: a tag without a Release shows an empty page there.
 #
 # Triggers: called by the Release workflow once the release commit and its tag
-# are pushed; a `vX.Y.Z` tag pushed by hand; a manual run (back-fill).
+# are pushed; a manual run (back-fill). No `push: tags` trigger: the release
+# tag is pushed with a deploy key and would start a second, racing run.
 # Idempotent: it only creates the missing Releases, oldest first. The notes
 # are the version's section of CHANGELOG.md, read from the tag itself.
 # -----------------------------------------------------------------------------
 name: GitHub releases
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
   workflow_call:
 
