@@ -249,8 +249,7 @@ flowchart LR
 - The image is published and checked **before** the manifest on `main` announces the new version.
 - Manual run (Actions → Release → Run workflow): `release-as` forces a version, `dry-run` only shows the version
   and the notes.
-- A protected `main` would reject the release commit: allow GitHub Actions to bypass the rule, or use a GitHub
-  App token.
+- **Protected branch**: rulesets require a pull request on `main` and lock the `v*` tags; only the maintainer and deploy keys get through. The release pushes with the deploy key of the `release` environment (secret `RELEASE_DEPLOY_KEY`, `main` only): a run from another branch never gets it. `build.yml` and `github-release.yml` do not start on a tag: the release calls them, or run them by hand (Actions → Run workflow, with `version` for the image) to finish a release.
 
 ## Troubleshooting
 

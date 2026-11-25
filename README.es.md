@@ -254,8 +254,7 @@ flowchart LR
 - La imagen se publica y se verifica **antes** de que el manifiesto de `main` anuncie la nueva versión.
 - Ejecución manual (Actions → Release → Run workflow): `release-as` fuerza una versión, `dry-run` solo muestra la
   versión y las notas.
-- Una rama `main` protegida rechazaría el commit de release: permita que GitHub Actions omita la regla, o use el token
-  de una GitHub App.
+- **Rama protegida**: unos rulesets exigen una pull request en `main` y bloquean las etiquetas `v*`; solo pasan el mantenedor y las deploy keys. La publicación hace push con la deploy key del entorno `release` (secreto `RELEASE_DEPLOY_KEY`, solo `main`): una ejecución lanzada desde otra rama nunca la obtiene. `build.yml` y `github-release.yml` no arrancan con una etiqueta: la publicación los llama, o lánzelos a mano (Actions → Run workflow, con `version` para la imagen) para terminar una publicación.
 
 ## Solución de problemas
 
